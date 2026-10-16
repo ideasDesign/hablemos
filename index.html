@@ -9,7 +9,7 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Hablemos">
-  <title>Hablemos 1.4 · Conversaciones sin escribir</title>
+  <title>Hablemos 1.5 · Conversaciones sin escribir</title>
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./assets/icon-192.png" type="image/png">
   <style>
@@ -253,77 +253,96 @@
     @media(min-width:680px){.wrap{padding-left:26px;padding-right:26px}.top .wrap{padding:18px 26px 20px}.phrases{grid-template-columns:repeat(3,minmax(0,1fr))}.phrase{min-height:116px}.action{min-height:82px}}
     @media(max-width:350px){.wrap{padding-left:9px;padding-right:9px}.card{padding:12px}.phrase{padding:12px 9px;font-size:.95rem}.action{font-size:.95rem}}
     @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
-    /* ===== V1.4: diseño moderno ===== */
-    body{background:linear-gradient(165deg,#eef7f5 0%,#e6eff8 55%,#eef0fa 100%);background-attachment:fixed}
+    /* ===== V1.5: diseño adulto y sobrio ===== */
+    :root{--ink:#1d2a33;--muted:#5d6b75;--line:#dde3e8;--soft:#f2f4f7;--primary:#17485a}
+    body{background:#eef1f4;color:var(--ink)}
     .app{gap:10px}
-    .topbar .help{background:linear-gradient(135deg,#ffefe9,#ffe1d8);border:0;box-shadow:0 4px 14px #b3261e22;color:#8f2418;border-radius:20px}
-    .topbar .gear{background:#ffffffcc;border:0;box-shadow:0 4px 14px #10384814;border-radius:20px}
-    .msg-strip{border:0;border-left:7px solid var(--primary);border-radius:22px;background:#fff;box-shadow:0 8px 24px #10384816}
-    .msg-strip.empty{border:2px dashed #b7cbd0;border-left-width:2px;background:#ffffffb3;box-shadow:none}
+    svg.ui{width:1.25em;height:1.25em;vertical-align:-.25em;margin-right:.35em;flex-shrink:0}
+    .topbar .help{background:#fff;border:2px solid #e6c1bd;color:#9b2c22;border-radius:16px;font-weight:750;box-shadow:none}
+    .topbar .help svg.ui{color:#b3261e}
+    .topbar .gear{background:#fff;border:2px solid var(--line);border-radius:16px;color:#3c4a54;box-shadow:none;display:grid;place-items:center}
+    .topbar .gear svg.ui{margin:0;width:1.5em;height:1.5em}
+    .msg-strip{background:#fff;border:2px solid #cfd8de;border-left:6px solid var(--primary);border-radius:16px;box-shadow:0 1px 2px #0f172a0d;font-weight:750;color:var(--ink)}
+    .msg-strip.empty{border:2px dashed #c3ccd3;border-left-width:2px;background:#f8f9fb;color:#6b7781;font-weight:600}
     .board{gap:10px}
-    .tile{border:0;border-radius:22px;background:#fff;box-shadow:0 5px 16px #1038481a,0 1px 2px #10384814;transition:transform .08s ease,box-shadow .08s ease;color:#16323c}
-    .tile:active{transform:scale(.96);box-shadow:0 2px 6px #1038481f}
-    .tile .picto{width:auto;height:52%;max-height:86px;min-height:34px;object-fit:contain;pointer-events:none;flex-shrink:1}
-    .tile.has-picto{gap:4px;padding-top:8px}
-    .tile.has-picto .lbl{-webkit-line-clamp:2;font-size:1.08rem}
-    .tile.phrase.has-picto .lbl{font-size:1rem}
-    /* Colores por tipo de palabra (clave de Fitzgerald, usada en comunicación aumentativa) */
-    .tile.cat-inicio,.tile.cat-acciones{background:#e9f8ee;box-shadow:inset 0 -6px 0 #34a865,0 5px 16px #1038481a}
-    .tile.cat-detalles{background:#fff2e4;box-shadow:inset 0 -6px 0 #e98a2c,0 5px 16px #1038481a}
-    .tile.cat-personas{background:#fff8d8;box-shadow:inset 0 -6px 0 #d8ad10,0 5px 16px #1038481a}
-    .tile.cat-tiempo{background:#e6f5f9;box-shadow:inset 0 -6px 0 #2f9dbd,0 5px 16px #1038481a}
-    .tile.cat-sentimientos{background:#e8efff;box-shadow:inset 0 -6px 0 #4673db,0 5px 16px #1038481a}
-    .tile.cat-preguntas{background:#f3eaff;box-shadow:inset 0 -6px 0 #8f55dc,0 5px 16px #1038481a}
-    .tile.cat-respuestas{background:#ffeaf2;box-shadow:inset 0 -6px 0 #d8467f,0 5px 16px #1038481a}
-    .tile.cat-propias{background:#f4f6f7;box-shadow:inset 0 -6px 0 #7c8b90,0 5px 16px #1038481a}
-    .tile.learned::after{content:'★';position:absolute;top:6px;right:10px;color:#c98a14;font-size:1rem}
+    .tile{background:#fff;border:1px solid var(--line);border-radius:16px;box-shadow:0 1px 2px #0f172a0d,0 3px 10px #0f172a0a;color:var(--ink);font-weight:700;transition:transform .08s ease,background .08s ease}
+    .tile:active{transform:scale(.97);background:#f4f6f8}
+    .tile svg.ico{width:42%;height:auto;max-width:46px;max-height:46px;min-width:26px;color:#4b5963;flex-shrink:0}
+    .tile.has-icon{gap:6px}
+    .tile.has-icon .lbl{-webkit-line-clamp:2;font-size:1.08rem}
+    .tile.phrase .lbl{font-size:1rem;font-weight:650}
+    .tile svg.mark{position:absolute;top:8px;right:8px;width:16px;height:16px;color:#b7862a}
+    /* Colores por tipo de palabra (clave de Fitzgerald), en tonos sobrios: línea a la izquierda e ícono del mismo color */
+    .tile[class*="cat-"]{border-left-width:6px}
+    .tile.cat-inicio,.tile.cat-acciones{border-left-color:#3f8f5a}.tile.cat-inicio svg.ico,.tile.cat-acciones svg.ico{color:#3f8f5a}
+    .tile.cat-detalles{border-left-color:#c27a32}.tile.cat-detalles svg.ico{color:#c27a32}
+    .tile.cat-personas{border-left-color:#b38d22}.tile.cat-personas svg.ico{color:#a07d18}
+    .tile.cat-tiempo{border-left-color:#3a8ca3}.tile.cat-tiempo svg.ico{color:#3a8ca3}
+    .tile.cat-sentimientos{border-left-color:#4f6fb3}.tile.cat-sentimientos svg.ico{color:#4f6fb3}
+    .tile.cat-preguntas{border-left-color:#7a5bb0}.tile.cat-preguntas svg.ico{color:#7a5bb0}
+    .tile.cat-respuestas{border-left-color:#b5527a}.tile.cat-respuestas svg.ico{color:#b5527a}
+    .tile.cat-propias{border-left-color:#6b7280}
+    .tile.learned{background:#fffaf0}
     .tile.learned .lbl::before{content:''}
-    .tile.folder{background:linear-gradient(145deg,#1f7a8f,#124a59);color:#fff;box-shadow:0 6px 18px #124a5940}
-    .tile.folder .badge{background:#ffcf4a;color:#3b2a00}
-    .tile.back,.tile.nav{background:#f3f6f7;border:2px solid #d6e2e4;color:#2f4b52;box-shadow:none}
-    .tile.reply{background:#eaf8ef;box-shadow:inset 0 -6px 0 #3aa66a,0 5px 16px #1038481a;color:#123d27}
-    .tile.quote{background:linear-gradient(135deg,#e4f1fd,#d8eafb);border:0;color:#0f3550;box-shadow:0 5px 16px #1f78b826}
-    .tile.person{background:linear-gradient(145deg,#2a8fd8,#1c68a6);color:#fff;border:0;box-shadow:0 6px 18px #1c68a640}
-    .tile.person.preferred{box-shadow:0 0 0 4px #ffcf4a,0 6px 18px #1c68a640}
-    .act{border-radius:22px;box-shadow:0 6px 18px #10384822;font-weight:850}
-    .act.erase{background:#fff;border:0;color:#2a4650}
-    .act.speak{background:linear-gradient(145deg,#1a6b80,#0e3d4a)}
-    .act.send{background:linear-gradient(145deg,#2f97e0,#1c68a6)}
-    .act.help-yes{background:linear-gradient(145deg,#d93a2f,#a3241b)}
-    .act.cancel{background:#fff;border:2px solid #d6e2e4}
-    .act.dim{opacity:.45;box-shadow:none}
-    .incoming{background:#fff;border:0;border-left:7px solid #1f78b8;border-radius:22px;box-shadow:0 8px 24px #1f78b826}
-    .join{background:#fff;border:0;border-left:7px solid #d49737;border-radius:22px;box-shadow:0 8px 24px #d4973726}
-    dialog{border-radius:28px}
-    dialog::backdrop{background:#0d2f3a88;backdrop-filter:blur(3px)}
-    .bubble{border:0;box-shadow:0 3px 10px #10384812;border-radius:20px}
+    .tile.folder{background:#1f3b4a;border-color:#1f3b4a;color:#fff}
+    .tile.folder svg.ico{color:#cfe3ea}
+    .tile.folder .badge{background:#e7b84a;color:#2b2000}
+    .tile.back,.tile.nav{background:#e9edf1;border:1px solid #d5dce2;color:#33424c;box-shadow:none}
+    .tile.back svg.ico,.tile.nav svg.ico{color:#56656f}
+    .tile.reply{border-left:6px solid #3f8f5a;background:#fff;color:var(--ink)}
+    .tile.reply svg.ico{color:#3f8f5a}
+    .tile.quote{background:#e9f1f7;border:1px solid #cfdeea;border-left:6px solid #2f6f9f;color:#16364c}
+    .tile.quote svg.ico{color:#2f6f9f;max-width:34px}
+    .tile.person{background:#1f5f8f;border-color:#1f5f8f;color:#fff}
+    .tile.person svg.ico{color:#d6e8f5}
+    .tile.person.preferred{box-shadow:0 0 0 3px #e7b84a}
+    .tile.person .badge{background:#2f7a52}
+    .act{border-radius:16px;box-shadow:none;font-weight:750;font-size:1.05rem}
+    .act svg.ui{width:1.7em;height:1.7em;margin:0 0 4px}
+    .act span{font-size:1.05rem}
+    .act.erase{background:#fff;border:2px solid var(--line);color:#33424c}
+    .act.speak{background:#17485a}
+    .act.send{background:#1f5f8f}
+    .act.help-yes{background:#a52a20}
+    .act.cancel{background:#fff;border:2px solid var(--line);color:#33424c}
+    .act.dim{opacity:.45}
+    .incoming{background:#fff;border:1px solid #cfdeea;border-left:6px solid #2f6f9f;border-radius:16px;box-shadow:0 3px 10px #0f172a0f}
+    .incoming-btn{display:flex;align-items:center;justify-content:center;border:1px solid #cfdeea;border-radius:12px;background:#f4f8fb;color:#16364c;font-weight:700}
+    .incoming-btn.close svg.ui{margin:0}
+    .join{background:#fff;border:1px solid #ead8b6;border-left:6px solid #b38d22;border-radius:16px;box-shadow:0 3px 10px #0f172a0f}
+    .join .action{display:flex;align-items:center;justify-content:center}
+    dialog{border-radius:20px}
+    dialog::backdrop{background:#0f1c2499;backdrop-filter:blur(2px)}
+    .bubble{border:1px solid var(--line);box-shadow:none;border-radius:14px}
     .bubble.in{background:#fff}
-    .bubble.out{background:#dcecfa}
-    body.contrast .tile{box-shadow:inset 0 0 0 3px #12323c}
-    body.contrast .tile.folder{box-shadow:inset 0 0 0 3px #000}
+    .bubble.out{background:#e7eef5}
+    .bubble-say{display:inline-flex;align-items:center;border-radius:10px}
+    .bubble-say.audio{background:#1f5f8f;border-color:#1f5f8f;color:#fff}
+    body.contrast .tile{border:2px solid #1d2a33}
+    body.contrast .tile svg.ico{color:#1d2a33}
     @media(prefers-reduced-motion:reduce){.tile{transition:none}}
   </style>
 </head>
 <body>
   <main class="app" id="app">
     <div class="topbar">
-      <button id="helpBtn" class="help" type="button">🆘 Necesito ayuda</button>
-      <button id="settingsOpen" class="gear" type="button" aria-label="Configuración: mantener apretado para abrir">⚙</button>
+      <button id="helpBtn" class="help" type="button" data-i="urgent"> Necesito ayuda</button>
+      <button id="settingsOpen" class="gear" type="button" aria-label="Configuración: mantener apretado para abrir" data-i="settings"></button>
     </div>
     <div id="touchHint" class="touch-hint" role="status" hidden></div>
     <div id="offline" class="offline" role="status" hidden>Sin internet: podés usar la voz. Para enviar mensajes hace falta conexión.</div>
     <div id="incoming" class="incoming" role="status" aria-live="polite" hidden>
       <p><strong id="incomingName"></strong> <span id="incomingText"></span></p>
       <div class="incoming-actions">
-        <button id="incomingSay" type="button" class="incoming-btn">🔊 Escuchar</button>
-        <button id="incomingReply" type="button" class="incoming-btn">💬 Responder</button>
-        <button id="incomingClose" type="button" class="incoming-btn close" aria-label="Cerrar aviso">✕</button>
+        <button id="incomingSay" type="button" class="incoming-btn" data-i="volume"> Escuchar</button>
+        <button id="incomingReply" type="button" class="incoming-btn" data-i="message-circle"> Responder</button>
+        <button id="incomingClose" type="button" class="incoming-btn close" aria-label="Cerrar aviso" data-i="x"></button>
       </div>
     </div>
     <div id="joinRequest" class="join" role="alert" hidden>
-      <p class="join-text"><span aria-hidden="true">👤</span> <strong id="joinName"></strong> quiere conversar con vos por Telegram.</p>
+      <p class="join-text"><strong id="joinName"></strong> quiere conversar con vos por Telegram.</p>
       <div class="actiongrid">
-        <button id="joinYes" type="button" class="action telegram">✓ Aceptar</button>
+        <button id="joinYes" type="button" class="action telegram" data-i="check"> Aceptar</button>
         <button id="joinNo" type="button" class="action cancel">Ahora no</button>
       </div>
     </div>
@@ -331,9 +350,9 @@
     <button id="msgStrip" class="msg-strip empty" type="button" aria-live="polite">Tocá las palabras para armar tu mensaje</button>
     <div id="board" class="board" aria-label="Palabras y frases"></div>
     <div class="actions">
-      <button id="eraseBtn" class="act erase dim" type="button" aria-label="Borrar la última palabra">↶<span>Borrar</span></button>
-      <button id="speakBtn" class="act speak dim" type="button" aria-label="Decir el mensaje en voz alta">🔊<span>Hablar</span></button>
-      <button id="sendBtn" class="act send dim" type="button" aria-label="Enviar el mensaje a una persona">✈<span>Enviar</span></button>
+      <button id="eraseBtn" class="act erase dim" type="button" aria-label="Borrar la última palabra" data-i="arrow-back-up"><span>Borrar</span></button>
+      <button id="speakBtn" class="act speak dim" type="button" aria-label="Decir el mensaje en voz alta" data-i="volume"><span>Hablar</span></button>
+      <button id="sendBtn" class="act send dim" type="button" aria-label="Enviar el mensaje a una persona" data-i="send"><span>Enviar</span></button>
     </div>
   </main>
 
@@ -386,8 +405,7 @@
       <h3 class="settings-group">Pantalla</h3>
       <div class="settingrow"><label for="largerText">Texto y botones más grandes</label><input id="largerText" type="checkbox"></div>
       <div class="settingrow"><label for="highContrast">Alto contraste</label><input id="highContrast" type="checkbox"></div>
-      <div class="settingrow"><label for="pictosToggle">Mostrar pictogramas en los botones</label><input id="pictosToggle" type="checkbox"></div>
-      <p class="formhint">Pictogramas: Sergio Palao. Origen: <a href="https://arasaac.org" target="_blank" rel="noopener">ARASAAC</a>. Licencia: CC BY-NC-SA. Propiedad: Gobierno de Aragón (España).</p>
+      <div class="settingrow"><label for="pictosToggle">Mostrar íconos en los botones de palabras</label><input id="pictosToggle" type="checkbox"></div>
 
       <h3 class="settings-group">Personas, palabras y frases</h3>
       <p class="formhint">Esto lo usa quien acompaña. Diego solo ve el tablero.</p>
@@ -471,11 +489,11 @@
   </dialog>
   <dialog id="helpSheet" class="sheet" data-board aria-labelledby="helpTitle">
     <div class="modalbody sheet-body">
-      <h2 id="helpTitle">🆘 ¿Aviso a tu familia por Telegram?</h2>
+      <h2 id="helpTitle">¿Aviso a tu familia por Telegram?</h2>
       <p class="send-preview">«Necesito ayuda ahora. Por favor, vení o llamame.»<br><small>Le llega a: <span id="helpCount"></span></small></p>
       <div class="sheet-people">
-        <button id="helpYes" type="button" class="act help-yes">🆘<span>Sí, avisar a todos</span></button>
-        <button id="helpNo" type="button" class="act cancel">✕<span>No, solo decirlo</span></button>
+        <button id="helpYes" type="button" class="act help-yes" data-i="urgent"><span>Sí, avisar a todos</span></button>
+        <button id="helpNo" type="button" class="act cancel" data-i="x"><span>No, solo decirlo</span></button>
       </div>
     </div>
   </dialog>
@@ -484,7 +502,7 @@
       <h2 id="sheetTitle">¿A quién se lo mando?</h2>
       <p id="sheetPreview" class="send-preview"></p>
       <div id="sheetPeople" class="sheet-people"></div>
-      <button id="sheetCancel" type="button" class="act cancel wide-act">✕<span>No enviar</span></button>
+      <button id="sheetCancel" type="button" class="act cancel wide-act" data-i="x"><span>No enviar</span></button>
     </div>
   </dialog>
 
@@ -614,7 +632,7 @@
     </div>
   </dialog>
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
-  <script src="./pictos.js?v=1.4" defer></script>
-  <script src="./app.js?v=1.4" defer></script>
+  <script src="./icons.js?v=1.5" defer></script>
+  <script src="./app.js?v=1.5" defer></script>
 </body>
 </html>

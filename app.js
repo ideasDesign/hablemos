@@ -433,27 +433,38 @@
   }
   function boardCols(){const w=$('board').clientWidth;return w>=900?4:w>=560?3:2;}
   function tileHeight(){return Math.round(88*(state.large?1.15:1));}
-  // ===== V1.4: pictogramas de ARASAAC y colores por tipo de palabra =====
-  // Autor de los pictogramas: Sergio Palao. Origen: ARASAAC (https://arasaac.org). Licencia: CC BY-NC-SA. Propiedad: Gobierno de Aragón.
-  const pictoUrl=id=>'https://static.arasaac.org/pictograms/'+id+'/'+id+'_300.png';
-  const pictoFor=label=>state.pictos&&window.HABLEMOS_PICTOS?window.HABLEMOS_PICTOS[label]||null:null;
-  // Colores de comunicación aumentativa: acciones en verde, personas en amarillo, cosas en naranja, sentimientos en azul…
+  // ===== V1.5: íconos de línea (Tabler Icons, MIT) y colores por tipo de palabra =====
+  // Estilo adulto y sobrio: un ícono simple por palabra o frase, sin dibujos infantiles ni emojis.
+  const ICONS=window.HABLEMOS_ICONS||{},ICON_FOR=window.HABLEMOS_ICON_FOR||{};
+  // Los botones de la interfaz traen un símbolo; acá se traduce al ícono equivalente.
+  const SYMBOL_ICON={'⭐':'star','💬':'messages','📂':'folder','◀':'chevron-left','▶':'chevron-right','✍':'pencil','✨':'sparkles','🔊':'volume','🌅':'sunrise','🌙':'moon',
+    '👤':'user','💾':'bookmark','☆':'star','▶️':'player-play','🏃':'run','🧩':'box','👥':'users','🕒':'clock','❤️':'heart','❓':'help-circle','✅':'circle-check',
+    '✏️':'pencil','🧡':'heart','🙂':'mood-smile','✈':'brand-telegram','🟢':'brand-whatsapp','🗣️':'message-circle'};
+  function svgIcon(name,cls='ico'){
+    const inner=ICONS[name];if(!inner)return null;
+    const ns='http://www.w3.org/2000/svg',svg=document.createElementNS(ns,'svg');
+    svg.setAttribute('viewBox','0 0 24 24');svg.setAttribute('fill','none');svg.setAttribute('stroke','currentColor');svg.setAttribute('stroke-width','1.8');
+    svg.setAttribute('stroke-linecap','round');svg.setAttribute('stroke-linejoin','round');svg.setAttribute('aria-hidden','true');svg.setAttribute('class',cls);
+    svg.innerHTML=inner;return svg;
+  }
   const catClass=label=>{const k=categoryOf(label);return k?' cat-'+k:'';};
   function makeTile(t){
     const b=document.createElement('button');b.type='button';
     const isWord=t.kind==='word'||t.kind==='learned';
     b.className='tile '+t.kind+(isWord?catClass(t.label):'');
-    const picto=(isWord||t.kind==='phrase'||t.kind==='reply')?pictoFor(t.label):null;
-    if(picto){
-      const img=document.createElement('img');img.className='picto';img.alt='';img.loading='lazy';img.decoding='async';img.src=pictoUrl(picto);
-      img.addEventListener('error',()=>{img.remove();if(t.icon){const i=document.createElement('span');i.className='ico';i.setAttribute('aria-hidden','true');i.textContent=t.icon;b.prepend(i);}});
-      b.append(img);b.classList.add('has-picto');
-    }else if(t.icon){const i=document.createElement('span');i.className='ico';i.setAttribute('aria-hidden','true');i.textContent=t.icon;b.append(i);}
+    const name=(state.pictos&&(isWord||t.kind==='phrase'||t.kind==='reply')?ICON_FOR[t.label]:null)||(t.icon?SYMBOL_ICON[t.icon]:null);
+    const icon=name&&(state.pictos||!isWord)?svgIcon(name):null;
+    if(icon){b.append(icon);b.classList.add('has-icon');}
     const l=document.createElement('span');l.className='lbl';l.textContent=t.label;b.append(l);
     if(t.extra){const x=document.createElement('span');x.className='badge';x.textContent=t.extra;b.append(x);}
+    if(t.kind==='learned'){const st=svgIcon('star','mark');if(st)b.append(st);}
     b.setAttribute('aria-label',(t.kind==='word'||t.kind==='learned'?'Agregar: ':t.kind==='reply'?'Responder: ':t.kind==='quote'?'Escuchar: ':'')+t.label+(t.extra?', '+t.extra:''));
     b.addEventListener('click',t.onTap);
     return b;
+  }
+  // Íconos fijos de la pantalla (ayuda, configuración, borrar, hablar, enviar…): <span data-i="nombre">.
+  function paintStaticIcons(){
+    document.querySelectorAll('[data-i]').forEach(el=>{if(el.firstChild&&el.firstChild.nodeName==='svg')return;const i=svgIcon(el.dataset.i,'ui');if(i)el.prepend(i);});
   }
   function renderBoard(){
     const root=$('board');root.replaceChildren();
@@ -488,7 +499,7 @@
     const c=state.contacts.find(x=>'chat:'+x.id===view);
     if(!c||!c.telegramId){view='main';renderBoard();return;}
     root.style.gridTemplateColumns='';root.style.gridTemplateRows='';
-    const title=document.createElement('h2');title.className='chat-title';title.textContent='💬 '+c.name;
+    const title=document.createElement('h2');title.className='chat-title';title.textContent=c.name;
     const thread=document.createElement('div');thread.className='chat-thread big';
     const list=(state.tg.threads[c.telegramId]||[]).slice(-20);
     if(!list.length){const p=document.createElement('p');p.className='muted';p.textContent='Todavía no hay mensajes con '+c.name+'.';thread.append(p);}
@@ -499,7 +510,7 @@
       row.append(who,text);
       if(m.dir==='in'){
         const say=document.createElement('button');say.type='button';say.className='bubble-say'+(m.audio?' audio':'');
-        say.textContent=m.audio?'▶ Escuchar audio':'🔊 Escuchar';
+        const si=svgIcon(m.audio?'player-play':'volume','ui');if(si)say.append(si);say.append(document.createTextNode(m.audio?' Escuchar audio':' Escuchar'));
         say.setAttribute('aria-label',(m.audio?'Escuchar audio de ':'Escuchar mensaje de ')+c.name);
         say.addEventListener('click',()=>m.audio?playAudio(c,m):talk(m.text));row.append(say);
       }
@@ -847,7 +858,7 @@
   }
   // ===== V1.3: audios de la familia, dentro de Hablemos =====
   const audioUrls=new Map();let playing=null;
-  const audioLabel=m=>'🎤 Audio'+(m.audio&&m.audio.d?' de '+m.audio.d+' s':'');
+  const audioLabel=m=>'Audio'+(m.audio&&m.audio.d?' de '+m.audio.d+' s':'');
   async function playAudio(c,m){
     if(!isServer()||!m||!m.audio||!Number.isInteger(m.id)){notify('Este audio se escucha en Telegram.');return;}
     try{
@@ -869,8 +880,8 @@
   let incomingMsg=null;
   function showIncoming(contact,text,msg=null){
     incomingContactId=contact.id;incomingMsg=msg&&msg.audio?msg:null;
-    $('incomingName').textContent='📩 '+contact.name+':';$('incomingText').textContent=incomingMsg?audioLabel(incomingMsg):text;$('incoming').hidden=false;
-    $('incomingSay').textContent=incomingMsg?'▶ Escuchar audio':'🔊 Escuchar';
+    $('incomingName').textContent=contact.name+':';$('incomingText').textContent=incomingMsg?audioLabel(incomingMsg):text;$('incoming').hidden=false;
+    $('incomingSay').lastChild.textContent=incomingMsg?' Escuchar audio':' Escuchar';
     chime();
     if(state.tg.autoRead){
       if(incomingMsg)setTimeout(()=>{talk(contact.name+' te mandó un audio.');setTimeout(()=>playAudio(contact,incomingMsg),2200);},state.tg.chime?750:0);
@@ -1455,19 +1466,8 @@
     startPolling();
   });
   renderAll();updateOffline();startPolling();if(tgReady())requestPersist();
-  function prefetchPictos(){
-    if(!state.pictos||!window.HABLEMOS_PICTOS||!navigator.onLine||!('serviceWorker' in navigator))return;
-    // La marca depende de la lista de pictogramas: si la lista cambia, se vuelven a guardar.
-    const ids=[...new Set(Object.values(window.HABLEMOS_PICTOS))].sort((x,y)=>x-y);
-    const mark=ids.length+':'+ids.reduce((h,id)=>(h*31+id)%1000000007,7);
-    let done=false;try{done=localStorage.getItem('hablemos.pictosGuardados')===mark;}catch(e){}
-    if(done)return;
-    let i=0;const next=()=>{if(i>=ids.length){try{localStorage.setItem('hablemos.pictosGuardados',mark);}catch(e){}return;}
-      fetch(pictoUrl(ids[i++]),{mode:'no-cors'}).catch(()=>{}).finally(()=>setTimeout(next,40));};
-    navigator.serviceWorker.ready.then(()=>setTimeout(next,3000));
-  }
-  prefetchPictos();
-  $('pictosToggle').addEventListener('change',e=>{state.pictos=e.target.checked;persist();renderScreen();prefetchPictos();});
+  paintStaticIcons();
+  $('pictosToggle').addEventListener('change',e=>{state.pictos=e.target.checked;persist();renderScreen();});
   // Secure origin is required for an installable Android PWA and service worker.
   if('serviceWorker' in navigator && (location.protocol==='https:'||location.hostname==='localhost')){
     window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));
