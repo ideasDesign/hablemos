@@ -36,8 +36,10 @@ const MAX_PENDING = 30;
 const LONG_POLL_MS = 25000;
 
 // ---------- Datos (archivo JSON en el volumen persistente) ----------
-// people[chatId] = {chatId, name, username, status: 'pending' | 'linked', since}
-let db = { seq: 0, pv: 0, people: {}, messages: [] };
+// people[chatId] = {chatId, name, username, status: 'pending' | 'linked', since, held?: mensajes que esperan aprobación}
+// invite = código del enlace de invitación: quien entra con él queda conectado solo.
+const newInvite = () => crypto.randomBytes(9).toString('base64url');
+let db = { seq: 0, pv: 0, people: {}, messages: [], invite: newInvite() };
 function load() {
   try {
     const d = JSON.parse(fs.readFileSync(FILE, 'utf8'));
@@ -46,7 +48,8 @@ function load() {
         seq: Number.isInteger(d.seq) ? d.seq : 0,
         pv: Number.isInteger(d.pv) ? d.pv : 0,
         people: d.people && typeof d.people === 'object' ? d.people : {},
-        messages: Array.isArray(d.messages) ? d.messages : []
+        messages: Array.isArray(d.messages) ? d.messages : [],
+        invite: typeof d.invite === 'string' && /^[\w-]{8,64}$/.test(d.invite) ? d.invite : newInvite()
       };
     }
   } catch (e) { /* primer arranque: no hay archivo todavía */ }
@@ -135,16 +138,25 @@ function onUpdate(u) {
   const name = [m.from.first_name, m.from.last_name].filter(Boolean).join(' ').trim().slice(0, 64) || m.from.username || 'Sin nombre';
   const text = describe(m);
   const isStart = /^\/start\b/.test(text);
+  const startCode = isStart ? (text.split(/\s+/)[1] || '') : '';
   const entry = { chatId, dir: 'in', text: text.slice(0, 4096), date: (m.date || Date.now() / 1000) * 1000, id: m.message_id };
   let p = db.people[chatId];
+  const isNew = !p;
   if (!p) {
-    // Alguien nuevo: queda pendiente hasta que quien acompaña lo apruebe en Hablemos.
     const pending = Object.values(db.people).filter(x => x.status === 'pending').sort((a, b) => a.since - b.since);
     if (pending.length >= MAX_PENDING) delete db.people[pending[0].chatId];
     p = db.people[chatId] = { chatId, name, username: (m.from.username || '').slice(0, 64), status: 'pending', since: Date.now(), held: [] };
     touchPeople();
   }
-  if (isStart) return;
+  // Entró con el enlace de invitación: queda conectado solo, sin que nadie tenga que aprobarlo.
+  if (isStart && startCode && startCode === db.invite) {
+    if (p.status !== 'linked') linkPerson(chatId, '', { welcome: true });
+    return;
+  }
+  if (isStart) {
+    if (isNew) tg('sendMessage', { chat_id: chatId, text: '👋 ¡Hola! Tu pedido para conversar por acá quedó esperando que te acepten. Te va a llegar un aviso cuando esté listo. Mientras tanto podés escribir: los mensajes se entregan al aceptarte.' }).catch(() => {});
+    return;
+  }
   if (p.status !== 'linked') {
     // Sus mensajes se guardan aparte (no se muestran) y se entregan si se aprueba a la persona, así no se pierden.
     p.held = (p.held || []).concat(entry).slice(-20);
@@ -152,6 +164,19 @@ function onUpdate(u) {
     return;
   }
   addMessage(entry);
+}
+
+// Conecta a una persona: entrega lo que mandó mientras esperaba y (si corresponde) le da la bienvenida.
+function linkPerson(chatId, name, { welcome }) {
+  const person = db.people[chatId];
+  const wasLinked = person.status === 'linked';
+  person.status = 'linked';
+  if (name) person.name = name;
+  const held = person.held || []; delete person.held;
+  touchPeople();
+  for (const h of held) addMessage(h);
+  if (!wasLinked && welcome) tg('sendMessage', { chat_id: chatId, text: '✅ ¡Listo! Ya estás conectado/a. Los mensajes de Hablemos te van a llegar por este chat, y podés responder escribiendo acá.' }).catch(() => {});
+  return held.length;
 }
 
 // ---------- HTTP ----------
@@ -221,7 +246,7 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/status' && req.method === 'GET') {
       const b = await getBot();
       if (!webhookOk) await ensureWebhook();
-      return send(res, 200, { ok: true, bot: b, botError, webhook: { ok: webhookOk, error: webhookError }, persistent: PERSISTENT }, cors);
+      return send(res, 200, { ok: true, bot: b, botError, webhook: { ok: webhookOk, error: webhookError }, persistent: PERSISTENT, invite: db.invite }, cors);
     }
 
     if (url.pathname === '/api/sync' && req.method === 'GET') {
@@ -237,7 +262,7 @@ const server = http.createServer(async (req, res) => {
         });
       }
       const messages = db.messages.filter(m => m.seq > since).slice(-500);
-      return send(res, 200, { seq: db.seq, pv: db.pv, reset, messages, people: publicPeople() }, cors);
+      return send(res, 200, { seq: db.seq, pv: db.pv, reset, messages, people: publicPeople(), invite: db.invite }, cors);
     }
 
     if (req.method === 'POST' && url.pathname.startsWith('/api/')) {
@@ -265,15 +290,13 @@ const server = http.createServer(async (req, res) => {
           touchPeople();
           return send(res, 200, { ok: true }, cors);
         }
-        const wasLinked = person.status === 'linked';
-        person.status = 'linked';
-        if (name) person.name = name;
-        // Entrega los mensajes que mandó mientras esperaba la aprobación.
-        const held = person.held || []; delete person.held;
-        touchPeople();
-        for (const h of held) addMessage(h);
-        if (!wasLinked && !body.migrate) tg('sendMessage', { chat_id: chatId, text: '✅ ¡Listo! Ya estás conectado/a. Los mensajes de Hablemos te van a llegar por este chat, y podés responder escribiendo acá.' }).catch(() => {});
-        return send(res, 200, { ok: true, delivered: held.length }, cors);
+        const delivered = linkPerson(chatId, name, { welcome: !body.migrate });
+        return send(res, 200, { ok: true, delivered }, cors);
+      }
+      if (url.pathname === '/api/invite/new') {
+        // Cambia el enlace de invitación (por ejemplo, si llegó a alguien que no debía). Las personas conectadas se mantienen.
+        db.invite = newInvite(); touchPeople();
+        return send(res, 200, { ok: true, invite: db.invite }, cors);
       }
       if (url.pathname === '/api/people/rename') {
         if (!person || typeof body.name !== 'string' || !body.name.trim()) return send(res, 400, { error: 'bad-request' }, cors);

@@ -9,7 +9,7 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Hablemos">
-  <title>Hablemos 0.6.2 · Conversaciones sin escribir</title>
+  <title>Hablemos 0.7 · Conversaciones sin escribir</title>
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./assets/icon-192.png" type="image/png">
   <style>
@@ -159,6 +159,10 @@
     .tg-pending{margin-bottom:6px}
     .tg-linked-name{flex:1;border:2px solid var(--line);border-radius:14px;padding:14px;font-weight:800;background:#f4f9f8}
     .danger{color:#9b2e32;border-color:#efb8b8}
+    .join{background:#fff6e0;border:3px solid #d49737;border-radius:18px;padding:14px;margin:0 0 12px;color:#3d2a07}
+    .join-text{margin:0 0 4px;font-size:1.15rem;line-height:1.4;overflow-wrap:anywhere}
+    .join .actiongrid{margin-top:10px}
+    .tg-invite{background:#1f78b8;margin:4px 0 6px}
     .conn-status{border-radius:12px;padding:9px 12px;margin:0 0 12px;font-size:.9rem;font-weight:750;line-height:1.4;background:#eef4f3;color:var(--ink)}
     .conn-status[data-state=ok],.conn-status[data-state=other-tab]{background:#e7f5ec;color:#1b4d2f}
     .conn-status[data-state=connecting],.conn-status[data-state=retrying]{background:#fff6dd;color:#5b4106}
@@ -209,6 +213,13 @@
         <button id="incomingSay" type="button" class="incoming-btn">🔊 Escuchar</button>
         <button id="incomingReply" type="button" class="incoming-btn">💬 Responder</button>
         <button id="incomingClose" type="button" class="incoming-btn close" aria-label="Cerrar aviso">✕</button>
+      </div>
+    </div>
+    <div id="joinRequest" class="join" role="alert" hidden>
+      <p class="join-text"><span aria-hidden="true">👤</span> <strong id="joinName"></strong> quiere conversar con vos por Telegram.</p>
+      <div class="actiongrid">
+        <button id="joinYes" type="button" class="action telegram">✓ Aceptar</button>
+        <button id="joinNo" type="button" class="action cancel">Ahora no</button>
       </div>
     </div>
     <section class="card" aria-labelledby="msg-title">
@@ -292,6 +303,7 @@
     <div class="modalbody">
       <p class="muted">Elegí una persona o agregá un nuevo contacto con su número de WhatsApp.</p>
       <div id="contactsList" class="contactlist"></div>
+      <button id="contactsInvite" type="button" class="formbtn tg-invite" hidden>✈ Invitar a alguien por Telegram</button>
       <form id="contactForm" novalidate>
         <h3 style="margin:18px 0 8px">Agregar contacto</h3>
         <label class="field" for="newContactName">Nombre</label>
@@ -482,12 +494,13 @@
           <button id="srvPinSave" type="button" class="formbtn">Guardar PIN</button>
         </details>
         <h3 class="settings-group">3. Invitar a la familia</h3>
-        <p class="formhint">Cada persona abre este enlace en su teléfono, con Telegram instalado, y toca <b>Iniciar</b>:</p>
+        <p id="tgInviteHint" class="formhint">Cada persona abre este enlace en su teléfono, con Telegram instalado, y toca <b>Iniciar</b>:</p>
         <p id="tgLink" class="tg-link"></p>
         <div class="actiongrid">
           <button id="tgShareLink" type="button" class="clear">Compartir enlace</button>
           <button id="tgCopyLink" type="button" class="clear">Copiar enlace</button>
         </div>
+        <button id="tgNewInvite" type="button" class="clear wide" hidden>Crear un enlace de invitación nuevo</button>
         <h3 class="settings-group">4. Conectar a cada persona</h3>
         <button id="tgRefresh" type="button" class="formbtn">🔄 Buscar personas que tocaron «Iniciar»</button>
         <div id="tgPending" class="tg-pending"></div>
@@ -533,6 +546,6 @@
     </div>
   </dialog>
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
-  <script src="./app.js?v=0.6.2" defer></script>
+  <script src="./app.js?v=0.7" defer></script>
 </body>
 </html>

@@ -127,7 +127,7 @@
     const serverOk=tg&&tg.server&&serverUrlOk(tg.server.url)&&typeof tg.server.pin==='string'&&tg.server.pin.length>0&&tg.server.pin.length<=128;
     if(tg&&typeof tg==='object'&&!Array.isArray(tg)&&(tokenOk||serverOk)){
       const clean=tgInitial();
-      if(serverOk){clean.server={url:tg.server.url.replace(/\/$/,''),pin:tg.server.pin};if(Number.isInteger(tg.seq)&&tg.seq>=0)clean.seq=tg.seq;if(Number.isInteger(tg.pv))clean.pv=tg.pv;}
+      if(serverOk){clean.server={url:tg.server.url.replace(/\/$/,''),pin:tg.server.pin};if(Number.isInteger(tg.seq)&&tg.seq>=0)clean.seq=tg.seq;if(Number.isInteger(tg.pv))clean.pv=tg.pv;if(typeof tg.invite==='string'&&/^[\w-]{8,64}$/.test(tg.invite))clean.invite=tg.invite;clean.synced=tg.synced===true;}
       else clean.token=tg.token;
       if(tg.bot&&typeof tg.bot.username==='string')clean.bot={username:tg.bot.username.slice(0,64),name:String(tg.bot.name||tg.bot.username).slice(0,64),...(Number.isInteger(tg.bot.id)?{id:tg.bot.id}:{})};
       if(Number.isInteger(tg.offset)&&tg.offset>=0)clean.offset=tg.offset;
@@ -349,6 +349,7 @@
     renderChat();
   }
   function renderContactList(){
+    $('contactsInvite').hidden=!(tgReady()&&state.tg.bot);
     const root=$('contactsList');root.replaceChildren();
     if(!state.contacts.length){const p=document.createElement('p');p.className='muted';p.textContent='No hay contactos guardados todavía.';root.append(p);return;}
     for(const c of state.contacts){
@@ -521,13 +522,14 @@
       if(/^\/start\b/.test(text))continue;
       if(pushThread(chatId,'in',text,(m.date||Date.now()/1000)*1000,m.message_id))showIncoming(contact,text);
     }
-    if(changed){persist();renderChat();if($('tgDialog').open)renderTgDialog();}
+    if(changed){persist();renderChat();renderJoinRequest();if($('tgDialog').open)renderTgDialog();}
   }
   // Aplica lo que manda el servidor: personas (pendientes y conectadas) y mensajes nuevos.
   // Las personas conectadas en el servidor aparecen como contactos en cualquier dispositivo nuevo.
   function handleServerSync(r){
     if(!r||typeof r!=='object')return;
-    const first=state.tg.seq===0||!!r.reset;
+    // La primera carga trae los mensajes viejos: se muestran sin anunciarlos. Después, todo mensaje nuevo se anuncia.
+    const first=!state.tg.synced||!!r.reset;
     if(r.reset)state.tg.threads={};
     if(Array.isArray(r.people)){
       const people=r.people.filter(p=>p&&chatIdOk(String(p.chatId)));
@@ -551,6 +553,9 @@
       if(added&&m.dir==='in'&&!first){const c=contactByChat(chatId);if(c)showIncoming(c,m.text);}
     }
     if(Number.isInteger(r.seq))state.tg.seq=r.seq;
+    state.tg.synced=true;
+    if(typeof r.invite==='string'&&/^[\w-]{8,64}$/.test(r.invite))state.tg.invite=r.invite;
+    renderJoinRequest();
     persist();renderSelectedContact();renderContactListIfOpen();
     if($('tgDialog').open)renderTgDialog();
   }
@@ -698,7 +703,29 @@
     finally{sending=false;}
   }
   // --- Configuración y vinculación ---
-  const botLink=()=>state.tg.bot?'https://t.me/'+state.tg.bot.username:'';
+  // Con el servidor, el enlace lleva el código de invitación: quien lo abre y toca «Iniciar» queda conectado solo.
+  const botLink=()=>state.tg.bot?'https://t.me/'+state.tg.bot.username+(isServer()&&state.tg.invite?'?start='+state.tg.invite:''):'';
+  async function shareInvite(){
+    const link=botLink();if(!link){notify('Primero hay que conectar Telegram.');return;}
+    const text='¡Hola! Para conversar conmigo por Telegram, abrí este enlace y tocá «Iniciar»: '+link;
+    if(navigator.share){try{await navigator.share({title:'Hablemos',text});return;}catch(e){if(e&&e.name==='AbortError')return;}}
+    window.open('https://wa.me/?text='+encodeURIComponent(text),'_blank','noopener');
+  }
+  // Aviso grande en la pantalla principal cuando alguien sin invitación quiere conversar: Diego decide con un toque.
+  const dismissedJoin=new Set(),announcedJoin=new Set();
+  function renderJoinRequest(){
+    const p=tgReady()?state.tg.pending.find(x=>!dismissedJoin.has(x.chatId)):null;
+    $('joinRequest').hidden=!p;if(!p)return;
+    $('joinRequest').dataset.chatId=p.chatId;$('joinName').textContent=p.name;
+    if(!announcedJoin.has(p.chatId)){announcedJoin.add(p.chatId);if(state.tg.autoRead)talk(p.name+' quiere conversar con vos por Telegram.');}
+  }
+  async function acceptJoin(){
+    const p=state.tg.pending.find(x=>x.chatId===$('joinRequest').dataset.chatId);if(!p){renderJoinRequest();return;}
+    const key=p.name.trim().toLocaleLowerCase('es');
+    const same=state.contacts.find(c=>!c.telegramId&&c.name.trim().toLocaleLowerCase('es')===key);
+    await linkPerson(p,same?same.id:'',{select:true});
+    renderJoinRequest();
+  }
   function renderTgStatus(){
     $('tgStatus').textContent=tgReady()?(isServer()?'Servidor · ':'')+'Bot @'+(state.tg.bot?state.tg.bot.username:'bot')+' · '+state.contacts.filter(c=>c.telegramId).length+' persona(s) conectada(s). '+(connText[tgConn]||''):'Sin configurar. Permite enviar y recibir mensajes sin salir de Hablemos.';
   }
@@ -712,6 +739,10 @@
     if(tgConn==='bad-pin')$('srvPinBox').open=true;
     $('tgBotName').textContent=state.tg.bot?state.tg.bot.name+' (@'+state.tg.bot.username+')':'tu bot';
     $('tgLink').textContent=botLink();
+    $('tgInviteHint').innerHTML=isServer()&&state.tg.invite
+      ?'Compartí este enlace con la familia (por ejemplo por WhatsApp). Quien lo abra en su teléfono, con Telegram instalado, y toque <b>Iniciar</b> queda <b>conectado automáticamente</b>: no hay que aprobar nada.'
+      :'Cada persona abre este enlace en su teléfono, con Telegram instalado, y toca <b>Iniciar</b>:';
+    $('tgNewInvite').hidden=!isServer();
     $('tgAutoRead').checked=state.tg.autoRead;$('tgConfirm').checked=state.tg.confirm;
     const pend=$('tgPending');pend.replaceChildren();
     if(!state.tg.pending.length){const p=document.createElement('p');p.className='muted';p.textContent='No hay personas esperando. Cuando alguien toque «Iniciar», tocá «Buscar personas».';pend.append(p);}
@@ -751,7 +782,7 @@
       row.append(name,del);linked.append(row);
     }
   }
-  async function linkPerson(p,contactId){
+  async function linkPerson(p,contactId,{select=false}={}){
     let c=contactId?state.contacts.find(x=>x.id===contactId):null;
     if(!c&&state.contacts.length>=50){notify('Se alcanzó el máximo de contactos.');return;}
     if(isServer()){
@@ -762,8 +793,8 @@
     if(!c){c={id:newContactId(),name:p.name.slice(0,36),phone:''};state.contacts.push(c);}
     c.telegramId=p.chatId;
     state.tg.pending=state.tg.pending.filter(x=>x.chatId!==p.chatId);
-    if(!state.selectedContactId)state.selectedContactId=c.id;
-    persist();renderTgDialog();renderSelectedContact();notify(c.name+' quedó conectado por Telegram');
+    if(select||!state.selectedContactId)state.selectedContactId=c.id;
+    persist();renderTgDialog();renderSelectedContact();renderJoinRequest();notify(c.name+' quedó conectado por Telegram');
     if(!isServer())try{await tgCall('sendMessage',{chat_id:p.chatId,text:'✅ ¡Listo! Ya estás conectado/a. Los mensajes de Hablemos te van a llegar por este chat, y podés responder escribiendo acá.'});}catch(e){}
   }
   // Comprueba un token con Telegram. Devuelve {token, me} o null (y muestra el error en pantalla).
@@ -826,7 +857,7 @@
     // Si había personas conectadas con el token directo, se pasan al servidor para no tener que reconectarlas.
     const before=state.contacts.filter(c=>c.telegramId);
     stopPolling();
-    state.tg={...tgInitial(),server:{url:ok.url,pin:ok.pin},bot:ok.status.bot,autoRead:state.tg.autoRead,confirm:state.tg.confirm,threads:state.tg.threads};
+    state.tg={...tgInitial(),server:{url:ok.url,pin:ok.pin},bot:ok.status.bot,invite:ok.status.invite||'',autoRead:state.tg.autoRead,confirm:state.tg.confirm,threads:state.tg.threads};
     for(const c of before){try{await srvCall('/api/people/link',{method:'POST',body:{chatId:c.telegramId,name:c.name,migrate:true}});}catch(e){}}
     $(pinInput).value='';
     persist();setConn('connecting');renderTgDialog();renderChat();startPolling();requestPersist();
@@ -1061,10 +1092,14 @@
   $('tgConnect').addEventListener('click',connectTelegram);
   $('tgRefresh').addEventListener('click',()=>{if(!navigator.onLine){notify('Se necesita internet.');return;}reportPending=true;kickPolling();notify('Buscando…');});
   $('tgCopyLink').addEventListener('click',async()=>{try{await navigator.clipboard.writeText(botLink());notify('Enlace copiado');}catch(e){notify('No se pudo copiar. El enlace es: '+botLink());}});
-  $('tgShareLink').addEventListener('click',async()=>{
-    const text='Para recibir mensajes de Hablemos, abrí este enlace y tocá «Iniciar»: '+botLink();
-    if(navigator.share){try{await navigator.share({title:'Hablemos',text});}catch(e){}}
-    else window.open('https://wa.me/?text='+encodeURIComponent(text),'_blank','noopener');
+  $('tgShareLink').addEventListener('click',shareInvite);
+  $('contactsInvite').addEventListener('click',shareInvite);
+  $('joinYes').addEventListener('click',acceptJoin);
+  $('joinNo').addEventListener('click',()=>{dismissedJoin.add($('joinRequest').dataset.chatId);renderJoinRequest();});
+  $('tgNewInvite').addEventListener('click',async()=>{
+    if(!window.confirm('¿Crear un enlace de invitación nuevo? El anterior deja de conectar solo. Las personas ya conectadas se mantienen.'))return;
+    try{const r=await srvCall('/api/invite/new',{method:'POST',body:{}});state.tg.invite=r.invite;persist();renderTgDialog();notify('Enlace nuevo listo para compartir');}
+    catch(e){notify(srvError(e));}
   });
   $('tgAutoRead').addEventListener('change',e=>{state.tg.autoRead=e.target.checked;persist();});
   $('tgConfirm').addEventListener('change',e=>{state.tg.confirm=e.target.checked;persist();});
@@ -1092,7 +1127,7 @@
   window.addEventListener('offline',()=>{if(tgReady())setConn('offline');});
   function renderAll(){
     $('message').value=state.message;$('combine').checked=state.combine;
-    renderSelectedContact();renderCategories();renderPhrases();renderTokens();renderPunctuation();renderBuildCategories();renderBuildTiles();updatePrefs();setMode(state.mode,false);renderConn();
+    renderSelectedContact();renderCategories();renderPhrases();renderTokens();renderPunctuation();renderBuildCategories();renderBuildTiles();updatePrefs();setMode(state.mode,false);renderConn();renderJoinRequest();
     if($('tgDialog').open)renderTgDialog();
     if($('settingsDialog').open)renderVoiceSettings();
     if($('contactsDialog').open)renderContactList();
