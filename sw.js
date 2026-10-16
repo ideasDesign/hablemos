@@ -1,10 +1,10 @@
-const CACHE='hablemos-offline-v25';
+const CACHE='hablemos-offline-v26';
 const FILES=['./','./index.html','./app.js','./icons.js','./manifest.webmanifest','./assets/icon-192.png','./assets/fondo.webp','./assets/icon-512.png'];
 self.addEventListener('install',event=>{
   event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(FILES)).then(()=>self.skipWaiting()));
 });
 self.addEventListener('activate',event=>{
-  event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>key!==CACHE).map(key=>caches.delete(key)))).then(()=>self.clients.claim()));
+  event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>key!==CACHE&&key!=='hablemos-voz').map(key=>caches.delete(key)))).then(()=>self.clients.claim()));
 });
 // Primero la red, para que siempre se use la última versión publicada (así no conviven versiones viejas y nuevas).
 // Si no hay internet o la red tarda más de 3 segundos, se usa la copia guardada.

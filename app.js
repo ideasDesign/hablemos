@@ -101,7 +101,7 @@
   const repeatOptions=[0,500,1000,2000];
   const initial = {contacts:[],selectedContactId:null,ownPhrases:[],message:'',category:'frecuentes',combine:false,large:false,contrast:false,
     tokens:[],punctuation:'.',buildCategory:'inicio',savedMessages:[],customBlocks:[],mode:'build',
-    suggest:true,aiReplies:true,pictos:true,learned:{},replyLearned:{},voiceURI:'',rate:.9,pitch:1,volume:1,holdMs:0,repeatMs:0,lastBackup:0};
+    suggest:true,aiReplies:true,pictos:true,cloudVoice:true,learned:{},replyLearned:{},voiceURI:'',rate:.9,pitch:1,volume:1,holdMs:0,repeatMs:0,lastBackup:0};
   const clampNumber=(value,min,max,fallback)=>typeof value==='number'&&isFinite(value)?Math.min(max,Math.max(min,value)):fallback;
   // V0.4: Telegram. threads = {chatId: [{dir:'in'|'out', text, date}]}; pending = personas que tocaron «Iniciar» y aún no están vinculadas.
   // V0.6: server = {url, pin} cuando Hablemos se conecta a su propio servidor (el token queda en el servidor). seq/pv = hasta dónde se sincronizó.
@@ -136,6 +136,7 @@
       if(typeof tg.chime==='boolean')clean.chime=tg.chime;
       if(typeof tg.push==='boolean')clean.push=tg.push;
       if(typeof tg.ai==='boolean')clean.ai=tg.ai;
+      if(tg.voice&&typeof tg.voice==='object')clean.voice={diego:tg.voice.diego===true,family:tg.voice.family===true};
       if(Array.isArray(tg.pending))clean.pending=tg.pending.filter(p=>p&&chatIdOk(p.chatId)&&typeof p.name==='string').slice(0,20).map(p=>({chatId:p.chatId,name:p.name.slice(0,64),username:typeof p.username==='string'?p.username.slice(0,64):''}));
       if(tg.threads&&typeof tg.threads==='object'){
         for(const [chatId,list] of Object.entries(tg.threads).slice(0,30)){
@@ -158,6 +159,7 @@
     if(['build','quick','saved'].includes(stored.mode))state.mode=stored.mode;
     if(typeof stored.suggest==='boolean')state.suggest=stored.suggest;
     if(typeof stored.aiReplies==='boolean')state.aiReplies=stored.aiReplies;
+    if(typeof stored.cloudVoice==='boolean')state.cloudVoice=stored.cloudVoice;
     if(typeof stored.pictos==='boolean')state.pictos=stored.pictos;
     if(stored.replyLearned&&typeof stored.replyLearned==='object'&&!Array.isArray(stored.replyLearned)){
       for(const [intent,counts] of Object.entries(stored.replyLearned).slice(0,40)){
@@ -342,7 +344,7 @@
     persist();
   }
   // Una frase completa se dice en voz alta al tocarla: un solo toque para lo más urgente.
-  function selectPhrase(phrase){setMessage(phrase);view='main';page=0;renderScreen();talk(phrase);}
+  function selectPhrase(phrase){setMessage(phrase);view='main';page=0;renderScreen();talk(phrase,'diego');}
   function saveCurrent(){
     const m=state.message.trim();if(!m){notify('Primero armá un mensaje.');return;}
     learnFromMessage();
@@ -577,8 +579,42 @@
     // Sin elección manual, spanishVoices() ya ordena primero las voces de hombre.
     return voices.find(v=>v.voiceURI===state.voiceURI)||voices.find(v=>v.lang.toLowerCase().startsWith('es'))||null;
   }
-  function talk(phrase){
+  // ===== V1.9: voz natural de ElevenLabs (por el servidor) =====
+  // who: 'diego' para lo que dice Diego; cualquier otro valor, para los mensajes de la familia y los avisos.
+  // Cada frase se baja una sola vez y queda guardada en el teléfono. Si algo falla, se usa la voz del teléfono.
+  let voiceAudio=null,talkSeq=0;const voiceUrls=new Map();
+  const cloudVoiceFor=w=>isServer()&&state.cloudVoice&&navigator.onLine&&!!(state.tg.voice&&state.tg.voice[w]);
+  function stopTalking(){talkSeq++;if(voiceAudio){voiceAudio.pause();voiceAudio=null;}if(hasVoice())window.speechSynthesis.cancel();}
+  function talk(phrase,who){
     const m=(phrase||'').trim();if(!m){notify('Primero prepará un mensaje.');return;}
+    const w=who==='diego'?'diego':'family';
+    stopTalking();const my=talkSeq;
+    if(cloudVoiceFor(w)){cloudTalk(m,w,my).catch(()=>{if(my===talkSeq)phoneTalk(m);});return;}
+    phoneTalk(m);
+  }
+  async function cloudTalk(m,w,my){
+    const key=w+'|'+m;let url=voiceUrls.get(key);
+    if(!url){
+      const cacheKey=new Request('https://voz.hablemos.local/'+w+'/'+encodeURIComponent(m));
+      let blob=null;
+      try{const hit=await (await caches.open('hablemos-voz')).match(cacheKey);if(hit)blob=await hit.blob();}catch(e){}
+      if(!blob){
+        const ctrl=new AbortController();const timer=setTimeout(()=>ctrl.abort(),8000);
+        try{
+          const r=await fetch(state.tg.server.url+'/api/tts',{method:'POST',signal:ctrl.signal,cache:'no-store',headers:{authorization:'Bearer '+state.tg.server.pin,'content-type':'application/json'},body:JSON.stringify({text:m,who:w})});
+          if(!r.ok)throw new Error('HTTP '+r.status);
+          blob=await r.blob();
+        }finally{clearTimeout(timer);}
+        try{await (await caches.open('hablemos-voz')).put(cacheKey,new Response(blob,{headers:{'content-type':'audio/mpeg'}}));}catch(e){}
+      }
+      url=URL.createObjectURL(blob);voiceUrls.set(key,url);
+      if(voiceUrls.size>60){const [k,u]=voiceUrls.entries().next().value;URL.revokeObjectURL(u);voiceUrls.delete(k);}
+    }
+    if(my!==talkSeq)return; // mientras bajaba, se pidió decir otra cosa
+    const a=new Audio(url);a.volume=Math.max(.1,state.volume);voiceAudio=a;
+    await a.play();
+  }
+  function phoneTalk(m){
     if(!hasVoice()){notify('Este navegador no tiene voz disponible.');return;}
     try{
       window.speechSynthesis.cancel();const utterance=new SpeechSynthesisUtterance(m);
@@ -588,8 +624,10 @@
       window.speechSynthesis.speak(utterance);
     }catch(e){notify('No se pudo usar la voz en este dispositivo.');}
   }
-  function speakMessage(){learnFromMessage();talk(state.message);}
+  function speakMessage(){learnFromMessage();talk(state.message,'diego');}
   function renderVoiceSettings(){
+    const cloud=isServer()&&!!(state.tg.voice&&state.tg.voice.diego);
+    $('cloudVoiceRow').hidden=!cloud;$('cloudVoice').checked=state.cloudVoice;
     const select=$('voiceSelect');select.replaceChildren();
     const voices=spanishVoices();
     const auto=document.createElement('option');auto.value='';auto.textContent='Automática (voz de hombre)';select.append(auto);
@@ -748,6 +786,7 @@
     state.tg.synced=true;
     if(typeof r.invite==='string'&&/^[\w-]{8,64}$/.test(r.invite))state.tg.invite=r.invite;
     if(typeof r.ai==='boolean')state.tg.ai=r.ai;
+    if(r.voice&&typeof r.voice==='object')state.tg.voice={diego:r.voice.diego===true,family:r.voice.family===true};
     renderJoinRequest();
     persist();renderSelectedContact();renderContactListIfOpen();
     if($('tgDialog').open)renderTgDialog();
@@ -862,7 +901,7 @@
   async function playAudio(c,m){
     if(!isServer()||!m||!m.audio||!Number.isInteger(m.id)){notify('Este audio se escucha en Telegram.');return;}
     try{
-      if(window.speechSynthesis)speechSynthesis.cancel();
+      stopTalking();
       if(playing){playing.pause();playing=null;}
       let url=audioUrls.get(m.id);
       if(!url){
@@ -1312,7 +1351,7 @@
   // 🆘 Ayuda: se dice en voz alta enseguida y, si hay Telegram, pregunta si avisar a toda la familia.
   let helpOpenedAt=0;
   $('helpBtn').addEventListener('click',()=>{
-    const msg='Necesito ayuda ahora. Por favor, vení.';setMessage(msg);talk(msg);
+    const msg='Necesito ayuda ahora. Por favor, vení.';setMessage(msg);talk(msg,'diego');
     if(tgContacts().length){helpOpenedAt=Date.now();$('helpCount').textContent=tgContacts().map(c=>c.name).join(', ');$('helpSheet').showModal();}
     else notify('Pedido de ayuda dicho en voz alta. Para avisar por mensaje, conectá a la familia por Telegram.');
   });
@@ -1370,11 +1409,11 @@
     if(!window.confirm('¿Olvidar el orden de palabras aprendido? Las sugerencias base se mantienen.'))return;
     state.learned={};lastLearned='';persist();renderScreen();notify('Sugerencias aprendidas borradas');
   });
-  $('voiceSelect').addEventListener('change',e=>{state.voiceURI=e.target.value;persist();renderVoiceSettings();talk('Hola, esta es mi voz.');});
+  $('voiceSelect').addEventListener('change',e=>{state.voiceURI=e.target.value;persist();renderVoiceSettings();talk('Hola, esta es mi voz.','diego');});
   for(const [id,key] of [['voiceRate','rate'],['voicePitch','pitch'],['voiceVolume','volume']]){
     $(id).addEventListener('input',e=>{state[key]=Number(e.target.value);renderVoiceSettings();persist();});
   }
-  $('voiceTest').addEventListener('click',()=>talk('Hola, esta es mi voz. ¿Me escuchás bien?'));
+  $('voiceTest').addEventListener('click',()=>talk('Hola, esta es mi voz. ¿Me escuchás bien?','diego'));
   $('voiceReset').addEventListener('click',()=>{state.voiceURI='';state.rate=initial.rate;state.pitch=initial.pitch;state.volume=initial.volume;renderVoiceSettings();persist();notify('Voz restablecida');});
   $('holdSelect').addEventListener('change',e=>{state.holdMs=Number(e.target.value);cancelHold();updatePrefs();persist();});
   $('repeatSelect').addEventListener('change',e=>{state.repeatMs=Number(e.target.value);updatePrefs();persist();});
@@ -1413,6 +1452,7 @@
   $('tgAutoRead').addEventListener('change',e=>{state.tg.autoRead=e.target.checked;persist();});
   $('tgChime').addEventListener('change',e=>{state.tg.chime=e.target.checked;persist();if(e.target.checked)chime();});
   $('aiReplies').addEventListener('change',e=>{state.aiReplies=e.target.checked;persist();});
+  $('cloudVoice').addEventListener('change',e=>{state.cloudVoice=e.target.checked;persist();talk('Hola, esta es mi voz.','diego');});
   $('pushEnable').addEventListener('click',()=>enablePush());
   $('pushTest').addEventListener('click',async()=>{
     try{const r=await srvCall('/api/push/test',{method:'POST',body:{}});notify(r.sent?'Aviso enviado: mirá la barra de notificaciones del teléfono.':'No hay teléfonos con avisos activados.');}

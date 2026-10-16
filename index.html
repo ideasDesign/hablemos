@@ -9,7 +9,7 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Hablemos">
-  <title>Hablemos 1.8.1 · Conversaciones sin escribir</title>
+  <title>Hablemos 1.9 · Conversaciones sin escribir</title>
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./assets/icon-192.png" type="image/png">
   <style>
@@ -485,6 +485,10 @@
         Mientras tanto, bajar el <b>Tono</b> hace la voz un poco más grave.
       </div>
       <div id="voiceQualityHint" class="voice-help" hidden></div>
+      <div id="cloudVoiceRow" hidden>
+        <div class="settingrow"><label for="cloudVoice">Voz natural de ElevenLabs (necesita internet)</label><input id="cloudVoice" type="checkbox"></div>
+        <p class="formhint">Lo que dice Diego suena con una voz humana. Cada frase se genera una vez y queda guardada. Sin internet, o si se terminan los créditos del mes, se usa sola la voz del teléfono de abajo. Voces: <a href="https://elevenlabs.io" target="_blank" rel="noopener">ElevenLabs</a>.</p>
+      </div>
       <label class="field" for="voiceSelect">Voz <span class="muted">(★ = natural; al elegir una se escucha un ejemplo)</span></label>
       <select id="voiceSelect" class="forminput"></select>
       <label class="field range-label" for="voiceRate">Velocidad <span id="rateValue">normal</span></label>
@@ -689,6 +693,6 @@
   </dialog>
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
   <script src="./icons.js?v=1.5" defer></script>
-  <script src="./app.js?v=1.8.1" defer></script>
+  <script src="./app.js?v=1.9" defer></script>
 </body>
 </html>

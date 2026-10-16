@@ -107,6 +107,49 @@ Cómo tienen que ser las respuestas:
 - Naturales y cálidas, como hablaría una persona adulta con su familia. Sin emojis.
 - No respondas el mensaje vos: devolvé solamente las opciones.`;
 let lastHelpAt = 0, lastHelpSent = 0;
+// ---------- Voz natural con ElevenLabs (opcional) ----------
+// La clave vive solo acá (ELEVENLABS_API_KEY). Cada frase se genera una sola vez y se guarda en el disco,
+// así las frases repetidas no gastan créditos. Si falla, la app usa sola la voz del teléfono.
+const TTS_KEY = (process.env.ELEVENLABS_API_KEY || '').replace(/\s+/g, '');
+const TTS_API = (process.env.ELEVENLABS_API_BASE || 'https://api.elevenlabs.io').replace(/\/$/, '');
+const TTS_MODEL = (process.env.ELEVENLABS_MODEL || 'eleven_flash_v2_5').trim();
+const TTS_VOICES = {
+  diego: (process.env.ELEVENLABS_VOICE_DIEGO || '5da4nOCHLuswM3TyAUSo').trim(), // «Diego – Casual & Friendly», acento argentino
+  family: (process.env.ELEVENLABS_VOICE_FAMILY || '').trim() // vacío: los mensajes de la familia se leen con la voz del teléfono
+};
+const TTS_DIR = path.join(DATA_DIR, 'voz');
+const TTS_MAX_CHARS_HOUR = Number(process.env.ELEVENLABS_MAX_CHARS_HOUR) || 2500; // tope para no gastar todo el mes de golpe
+let ttsChars = [], ttsBlockedUntil = 0, ttsProblem = '';
+const ttsReady = who => !!(TTS_KEY && /^[\w]{10,40}$/.test(TTS_VOICES[who] || ''));
+async function ttsAudio(who, text) {
+  const voice = TTS_VOICES[who];
+  const key = crypto.createHash('sha256').update(TTS_MODEL + '|' + voice + '|' + text).digest('hex').slice(0, 40);
+  const file = path.join(TTS_DIR, key + '.mp3');
+  try { return fs.readFileSync(file); } catch (e) { /* todavía no está guardada */ }
+  if (Date.now() < ttsBlockedUntil) { const err = new Error('pausa'); err.code = ttsProblem || 'tts-off'; throw err; }
+  const hourAgo = Date.now() - 3600e3;
+  ttsChars = ttsChars.filter(x => x.t > hourAgo);
+  if (ttsChars.reduce((n, x) => n + x.n, 0) + text.length > TTS_MAX_CHARS_HOUR) { const err = new Error('tope'); err.code = 'tts-limit'; throw err; }
+  const r = await fetch(`${TTS_API}/v1/text-to-speech/${voice}?output_format=mp3_44100_64`, {
+    method: 'POST', signal: AbortSignal.timeout(15000),
+    headers: { 'xi-api-key': TTS_KEY, 'content-type': 'application/json', accept: 'audio/mpeg' },
+    body: JSON.stringify({ text, model_id: TTS_MODEL, ...(/flash|turbo/.test(TTS_MODEL) ? { language_code: 'es' } : {}) })
+  });
+  if (!r.ok) {
+    let detail = ''; try { detail = JSON.stringify(await r.json()); } catch (e) {}
+    const code = r.status === 401 && /quota|credit/i.test(detail) ? 'tts-quota' : r.status === 401 ? 'tts-bad-key'
+      : /free_users|not available for free|paid/i.test(detail) ? 'tts-voice-paid' : /quota|credit/i.test(detail) ? 'tts-quota' : r.status === 429 ? 'tts-busy' : 'tts-error';
+    console.error(`ElevenLabs no generó la voz (${r.status}, ${code}):`, detail.slice(0, 300));
+    // Sin créditos, clave mala o voz paga: se deja de intentar un rato y la app usa la voz del teléfono.
+    if (code !== 'tts-busy' && code !== 'tts-error') { ttsProblem = code; ttsBlockedUntil = Date.now() + (code === 'tts-quota' ? 3 * 3600e3 : 15 * 60e3); }
+    const err = new Error(code); err.code = code; throw err;
+  }
+  const body = Buffer.from(await r.arrayBuffer());
+  ttsChars.push({ t: Date.now(), n: text.length }); ttsProblem = '';
+  try { fs.mkdirSync(TTS_DIR, { recursive: true }); fs.writeFileSync(file, body); } catch (e) { console.error('No se pudo guardar una frase de voz:', e.message); }
+  return body;
+}
+
 const audioCache = new Map(); // seq → audio descargado (los últimos 15, para no volver a bajarlos)
 const suggestCache = new Map(); // «chatId:seq» → respuestas (para no volver a pagar si se abre dos veces)
 const aiCalls = [];
@@ -365,7 +408,7 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/status' && req.method === 'GET') {
       const b = await getBot();
       if (!webhookOk) await ensureWebhook();
-      return send(res, 200, { ok: true, bot: b, botError, webhook: { ok: webhookOk, error: webhookError }, persistent: PERSISTENT, invite: db.invite, pushKey: db.vapid ? db.vapid.publicKey : '', pushDevices: db.pushSubs.length, ai: !!ai, aiModel: ai ? AI_MODEL : '' }, cors);
+      return send(res, 200, { ok: true, bot: b, botError, webhook: { ok: webhookOk, error: webhookError }, persistent: PERSISTENT, invite: db.invite, pushKey: db.vapid ? db.vapid.publicKey : '', pushDevices: db.pushSubs.length, ai: !!ai, aiModel: ai ? AI_MODEL : '', voice: { diego: ttsReady('diego'), family: ttsReady('family'), problem: ttsProblem } }, cors);
     }
 
     if (url.pathname === '/api/sync' && req.method === 'GET') {
@@ -381,7 +424,7 @@ const server = http.createServer(async (req, res) => {
         });
       }
       const messages = db.messages.filter(m => m.seq > since).slice(-500).map(m => m.audio ? { ...m, audio: { duration: m.audio.duration } } : m);
-      return send(res, 200, { seq: db.seq, pv: db.pv, reset, messages, people: publicPeople(), invite: db.invite, ai: !!ai }, cors);
+      return send(res, 200, { seq: db.seq, pv: db.pv, reset, messages, people: publicPeople(), invite: db.invite, ai: !!ai, voice: { diego: ttsReady('diego'), family: ttsReady('family') } }, cors);
     }
 
     if (req.method === 'POST' && url.pathname.startsWith('/api/')) {
@@ -427,6 +470,17 @@ const server = http.createServer(async (req, res) => {
         lastHelpSent = sent;
         console.log(`Pedido de ayuda enviado a ${sent} de ${linked.length} persona(s).`);
         return send(res, 200, { ok: true, sent, total: linked.length }, cors);
+      }
+      if (url.pathname === '/api/tts') {
+        const who = body.who === 'family' ? 'family' : 'diego';
+        const text = String(body.text || '').replace(/\s+/g, ' ').trim().slice(0, 600);
+        if (!ttsReady(who)) return send(res, 503, { error: 'tts-off' }, cors);
+        if (!text) return send(res, 400, { error: 'empty' }, cors);
+        try {
+          const audio = await ttsAudio(who, text);
+          res.writeHead(200, { 'content-type': 'audio/mpeg', 'content-length': audio.length, 'cache-control': 'private, max-age=31536000', ...cors });
+          return res.end(audio);
+        } catch (e) { return send(res, e.code === 'tts-limit' || e.code === 'tts-busy' ? 429 : 502, { error: e.code || 'tts-error' }, cors); }
       }
       if (url.pathname === '/api/suggest') {
         if (!ai) return send(res, 503, { error: 'ai-off' }, cors);
@@ -492,6 +546,7 @@ server.listen(PORT, () => {
   else if (tokenProblem()) console.warn('Atención:', tokenProblem());
   else if (TOKEN !== RAW_TOKEN.trim()) console.log('TELEGRAM_TOKEN tenía espacios, comillas o «bot» delante: se corrigió automáticamente.');
   if (!PIN) console.warn('Falta HABLEMOS_PIN.');
+  console.log(TTS_KEY ? `Voz de ElevenLabs activada (modelo ${TTS_MODEL}${TTS_VOICES.family ? ', con voz para la familia' : ''}).` : 'Voz de ElevenLabs desactivada (falta ELEVENLABS_API_KEY): se usa la voz del teléfono.');
   console.log(ai ? `Sugerencias con IA activadas (modelo ${AI_MODEL}).` : 'Sugerencias con IA desactivadas (falta ANTHROPIC_API_KEY): se usan las respuestas por reglas.');
   getBot().then(() => ensureWebhook());
   // Reintenta el webhook cada minuto hasta que quede configurado.
