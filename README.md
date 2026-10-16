@@ -1,6 +1,15 @@
-# Hablemos V0.4.1 — Crear conversaciones sin escribir
+# Hablemos V0.4.2 — Crear conversaciones sin escribir
 
 **Prototipo accesible para Android**. Diseñado para una persona que comprende texto y puede pulsar botones grandes, pero no puede hablar y tiene dificultad para escribir.
+
+## Cambios de la versión 0.4.2: voz más natural
+
+- La voz automática elige primero una **voz natural de hombre** si el navegador la tiene, y deja para el final las voces básicas, que suenan robóticas.
+- En Configuración → Voz, la lista marca cada voz como **★ natural** o **básica**, y al elegir una se escucha un ejemplo.
+- Si solo hay voces básicas de hombre, se explica cómo conseguir una natural:
+  - **Computadora con Windows:** abrir Hablemos en **Microsoft Edge** (viene con Windows), que tiene voces naturales como «Microsoft Tomas Online (Natural) - Spanish (Argentina)». Chrome en Windows solo trae las voces básicas de hombre (Raúl, Pablo). Los contactos y Telegram se guardan por navegador: en Edge hay que configurarlos de nuevo.
+  - **Android:** Ajustes → Salida de texto a voz → Servicios de voz de Google → ⚙ → Instalar datos de voz → Español, y descargar una voz de hombre.
+- Aviso al mover el **Tono**: alejarlo de «normal» suele volver la voz más robótica.
 
 ## Cambios de la versión 0.4.1: Telegram ya no se desconecta
 
@@ -82,8 +91,8 @@ Los datos (contactos, frases, palabras aprendidas) se guardan **solo en ese tel�
 
 ### Publicar una nueva versión
 
-1. Cambiar el nombre de la caché en `sw.js` (por ejemplo `hablemos-offline-v6` → `hablemos-offline-v7`), para actualizar la copia que se usa sin conexión.
-2. En `index.html`, cambiar la versión del script: `app.js?v=0.4.1` → `app.js?v=0.4.2`. **Si no se cambia, el navegador puede seguir usando el `app.js` anterior hasta 10 minutos.**
+1. Cambiar el nombre de la caché en `sw.js` (por ejemplo `hablemos-offline-v7` → `hablemos-offline-v8`), para actualizar la copia que se usa sin conexión.
+2. En `index.html`, cambiar la versión del script: `app.js?v=0.4.2` → `app.js?v=0.4.3`. **Si no se cambia, el navegador puede seguir usando el `app.js` anterior hasta 10 minutos.**
 3. Guardar los cambios con git y subirlos: `git commit -am "…"` y `git push`.
 4. En uno o dos minutos GitHub Pages publica la nueva versión. Con internet, la próxima vez que se abra Hablemos ya carga la nueva.
 

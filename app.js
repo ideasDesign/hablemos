@@ -360,8 +360,13 @@
     const voices=window.speechSynthesis.getVoices();
     const spanish=voices.filter(v=>v.lang.toLowerCase().startsWith('es'));
     const rank=v=>v.lang.toLowerCase().replace('_','-')==='es-ar'?0:/^es[-_](419|us|mx|uy|cl|co)/i.test(v.lang)?1:2;
-    return (spanish.length?spanish:voices).slice().sort((a,b)=>(isMale(b)-isMale(a))||rank(a)-rank(b)||(b.localService-a.localService)||a.name.localeCompare(b.name));
+    return (spanish.length?spanish:voices).slice().sort((a,b)=>(isMale(b)-isMale(a))||(voiceQuality(b)-voiceQuality(a))||rank(a)-rank(b)||(b.localService-a.localService)||a.name.localeCompare(b.name));
   }
+  // Calidad estimada por el nombre: las voces «Natural»/«Online» (Edge) o neuronales suenan humanas;
+  // las de Windows «Desktop» y eSpeak suenan robóticas.
+  const naturalVoice=v=>/natural|neural|online|enhanced|premium|wavenet|studio/i.test(v.name);
+  const basicVoice=v=>!naturalVoice(v)&&/microsoft|espeak|desktop/i.test(v.name);
+  const voiceQuality=v=>naturalVoice(v)?2:basicVoice(v)?0:1;
   // La Web Speech API no informa si una voz es de hombre o de mujer: se deduce por el nombre de la voz.
   const maleNames=/(^|[^a-záéíóúñ])(ra[uú]l|pablo|jorge|[aá]lvaro|tom[aá]s|gonzalo|diego|juan|carlos|enrique|andr[eé]s|gerardo|lorenzo|mateo|alonso|emilio|jos[eé]|manuel|miguel|sergio|el[ií]as|arnau|dar[ií]o|sa[uú]l|jaime|federico|alejandro|hombre|masculin[oa]|male)([^a-záéíóúñ]|$)/i;
   const femaleNames=/(^|[^a-záéíóúñ])(sabina|helena|laura|elena|paulina|m[oó]nica|marisol|isabela|dalia|elvira|abril|mar[ií]a|luc[ií]a|elsa|paloma|valentina|camila|catalina|renata|beatriz|sof[ií]a|ximena|irene|esperanza|ver[oó]nica|mujer|femenin[oa]|female)([^a-záéíóúñ]|$)/i;
@@ -389,15 +394,32 @@
     const voices=spanishVoices();
     const auto=document.createElement('option');auto.value='';auto.textContent='Automática (voz de hombre)';select.append(auto);
     for(const v of voices){
-      const o=document.createElement('option');o.value=v.voiceURI;o.textContent=v.name+' · '+v.lang+genderLabel(v)+(v.localService?'':' (necesita internet)');select.append(o);
+      const o=document.createElement('option');o.value=v.voiceURI;o.textContent=(naturalVoice(v)?'★ ':'')+v.name+' · '+v.lang+genderLabel(v)+(naturalVoice(v)?' · natural':basicVoice(v)?' · básica':'')+(v.localService?'':' (necesita internet)');select.append(o);
     }
     $('noMaleVoice').hidden=!hasVoice()||!voices.length||voices.some(isMale);
+    renderVoiceQualityHint(voices);
     select.value=spanishVoices().some(v=>v.voiceURI===state.voiceURI)?state.voiceURI:'';
     $('voiceRate').value=state.rate;$('voicePitch').value=state.pitch;$('voiceVolume').value=state.volume;
     $('rateValue').textContent=state.rate<.8?'lenta':state.rate>1.1?'rápida':'normal';
     $('pitchValue').textContent=state.pitch<.85?'grave':state.pitch>1.15?'aguda':'normal';
     $('volumeValue').textContent=Math.round(state.volume*100)+'%';
     $('noVoice').hidden=hasVoice();
+    $('pitchHint').hidden=Math.abs(state.pitch-1)<.08;
+  }
+  // Si la mejor voz de hombre disponible es básica (robótica), explica cómo conseguir una natural según el dispositivo.
+  function renderVoiceQualityHint(voices){
+    const box=$('voiceQualityHint');
+    const current=pickVoice();
+    const ua=navigator.userAgent;
+    const show=hasVoice()&&voices.length>0&&!!current&&basicVoice(current)&&!voices.some(v=>isMale(v)&&naturalVoice(v));
+    box.hidden=!show;if(!show)return;
+    const naturalOther=voices.find(naturalVoice)||voices.find(v=>!basicVoice(v));
+    let text;
+    if(/Windows/.test(ua)&&!/Edg\//.test(ua))text='La voz de hombre de esta computadora es básica y suena robótica. <b>Microsoft Edge</b> (viene con Windows) tiene voces naturales de hombre, como <b>«Microsoft Tomas Online (Natural) - Spanish (Argentina)»</b>: abrí Hablemos en Edge y elegila en esta lista. Ojo: los contactos y Telegram se guardan por navegador, así que habría que configurarlos de nuevo en Edge.';
+    else if(/Android/.test(ua))text='Para que suene más natural: en Android, abrí <b>Ajustes → Salida de texto a voz</b>, elegí <b>Servicios de voz de Google</b>, tocá ⚙ → <b>Instalar datos de voz → Español</b> y descargá una voz de hombre. Las voces de Google suenan mucho más humanas que las básicas.';
+    else text='Esta voz es básica y puede sonar robótica. Si el sistema permite instalar voces nuevas en español, instalá una «natural» o «mejorada» y elegila acá.';
+    if(naturalOther)text+='<br>Mientras tanto, la voz más natural de esta lista es <b>'+naturalOther.name.replace(/[<>&]/g,'')+'</b>'+(isMale(naturalOther)?'':' (de mujer)')+'.';
+    box.innerHTML=text;
   }
   function sendWhatsApp(){
     const msg=state.message.trim();if(!msg){notify('Primero prepará un mensaje.');return;}
@@ -786,7 +808,7 @@
     if(!window.confirm('¿Olvidar el orden de palabras aprendido? Las sugerencias base se mantienen.'))return;
     state.learned={};lastLearned='';renderSuggestions();persist();notify('Sugerencias aprendidas borradas');
   });
-  $('voiceSelect').addEventListener('change',e=>{state.voiceURI=e.target.value;persist();});
+  $('voiceSelect').addEventListener('change',e=>{state.voiceURI=e.target.value;persist();renderVoiceSettings();talk('Hola, esta es mi voz.');});
   for(const [id,key] of [['voiceRate','rate'],['voicePitch','pitch'],['voiceVolume','volume']]){
     $(id).addEventListener('input',e=>{state[key]=Number(e.target.value);renderVoiceSettings();persist();});
   }
