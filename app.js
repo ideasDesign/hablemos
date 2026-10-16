@@ -617,10 +617,12 @@
   function spanishVoices(){
     if(!hasVoice())return [];
     const voices=window.speechSynthesis.getVoices();
-    const spanish=voices.filter(v=>v.lang.toLowerCase().startsWith('es'));
+    // iPhone y iPad traen voces de fantasía (Eddy, Flo, Grandpa, Rocko…) en todos los idiomas: suenan raras, no se usan.
+    const spanish=voices.filter(v=>v.lang.toLowerCase().startsWith('es')&&!noveltyVoice(v));
     const rank=v=>v.lang.toLowerCase().replace('_','-')==='es-ar'?0:/^es[-_](419|us|mx|uy|cl|co)/i.test(v.lang)?1:2;
     return (spanish.length?spanish:voices).slice().sort((a,b)=>(isMale(b)-isMale(a))||(voiceQuality(b)-voiceQuality(a))||rank(a)-rank(b)||(b.localService-a.localService)||a.name.localeCompare(b.name));
   }
+  const noveltyVoice=v=>/^(eddy|flo|grandma|grandpa|reed|rocko|sandy|shelley|albert|bad news|bahh|bells|boing|bubbles|cellos|good news|jester|organ|superstar|trinoids|whisper|wobble|zarvox|fred|junior|kathy|ralph)([^a-z]|$)/i.test(v.name);
   // Calidad estimada por el nombre: las voces «Natural»/«Online» (Edge) o neuronales suenan humanas;
   // las de Windows «Desktop» y eSpeak suenan robóticas.
   const naturalVoice=v=>/natural|neural|online|enhanced|premium|wavenet|studio/i.test(v.name);

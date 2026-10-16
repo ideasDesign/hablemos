@@ -158,7 +158,7 @@ const TTS_API = (process.env.ELEVENLABS_API_BASE || 'https://api.elevenlabs.io')
 const TTS_MODEL = (process.env.ELEVENLABS_MODEL || 'eleven_flash_v2_5').trim();
 const TTS_VOICES = {
   diego: (process.env.ELEVENLABS_VOICE_DIEGO || 'cjVigY5qzO86Huf0OWal').trim(), // «Eric», voz incluida en el plan gratis (las de la biblioteca, como «Diego», piden plan pago por API)
-  family: (process.env.ELEVENLABS_VOICE_FAMILY || '').trim() // vacío: los mensajes de la familia se leen con la voz del teléfono
+  family: (process.env.ELEVENLABS_VOICE_FAMILY || 'EXAVITQu4vr4xnSDxMaL').trim() // «Sarah», incluida en el plan gratis: lee los mensajes de la familia y los avisos (poné «telefono» para usar la voz del teléfono)
 };
 const TTS_DIR = path.join(DATA_DIR, 'voz');
 const TTS_MAX_CHARS_HOUR = Number(process.env.ELEVENLABS_MAX_CHARS_HOUR) || 2500; // tope para no gastar todo el mes de golpe

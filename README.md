@@ -1,6 +1,11 @@
-# Hablemos V2.2 — Crear conversaciones sin escribir
+# Hablemos V2.2.1 — Crear conversaciones sin escribir
 
 **Prototipo accesible para Android**. Diseñado para una persona que comprende texto y puede pulsar botones grandes, pero no puede hablar y tiene dificultad para escribir.
+
+## Cambios de la versión 2.2.1: voz natural para los mensajes de la familia
+
+- Los mensajes que llegan y los avisos se leen con «Sarah», otra voz de ElevenLabs incluida en el plan gratis (distinta de la de Diego). Se cambia con `ELEVENLABS_VOICE_FAMILY` en Railway (`telefono` = voz del dispositivo).
+- Cuando se usa la voz del dispositivo, se descartan las voces de fantasía de iPhone y iPad (Eddy, Flo, Grandpa, Rocko…).
 
 ## Cambios de la versión 2.2: configuración más clara
 
@@ -25,7 +30,7 @@
 ## Cambios de la versión 1.9: voz natural con ElevenLabs
 
 - Lo que dice Diego suena con una voz humana de ElevenLabs (por defecto «Eric», incluida en el plan gratis; las voces de la biblioteca, como «Diego» con acento argentino, solo funcionan por API con plan pago o US$5 de créditos).
-- La clave va solo en Railway: variable `ELEVENLABS_API_KEY`. Opcionales: `ELEVENLABS_VOICE_DIEGO`, `ELEVENLABS_VOICE_FAMILY` (ID de otra voz para leer los mensajes de la familia; vacía = voz del teléfono), `ELEVENLABS_MODEL` (por defecto `eleven_flash_v2_5`, la mitad de créditos por carácter) y `ELEVENLABS_MAX_CHARS_HOUR` (tope por hora, 2500).
+- La clave va solo en Railway: variable `ELEVENLABS_API_KEY`. Opcionales: `ELEVENLABS_VOICE_DIEGO`, `ELEVENLABS_VOICE_FAMILY` (voz para leer los mensajes de la familia; por defecto «Sarah»), `ELEVENLABS_MODEL` (por defecto `eleven_flash_v2_5`, la mitad de créditos por carácter) y `ELEVENLABS_MAX_CHARS_HOUR` (tope por hora, 2500).
 - Cada frase se genera una sola vez: queda guardada en el servidor (`/data/voz`) y en el teléfono, así las frases repetidas no gastan créditos.
 - Sin internet, sin créditos o si la voz no está disponible, se usa sola la voz del teléfono. Se puede apagar en Configuración → Voz.
 
@@ -289,8 +294,8 @@ Los datos (contactos, frases, palabras aprendidas) se guardan **solo en ese tel�
 
 ### Publicar una nueva versión
 
-1. Cambiar el nombre de la caché en `sw.js` (por ejemplo `hablemos-offline-v29` → `hablemos-offline-v30`), para actualizar la copia que se usa sin conexión.
-2. En `index.html`, cambiar la versión del script: `app.js?v=2.2` → `app.js?v=2.2.1`. **Si no se cambia, el navegador puede seguir usando el `app.js` anterior hasta 10 minutos.**
+1. Cambiar el nombre de la caché en `sw.js` (por ejemplo `hablemos-offline-v30` → `hablemos-offline-v31`), para actualizar la copia que se usa sin conexión.
+2. En `index.html`, cambiar la versión del script: `app.js?v=2.2.1` → `app.js?v=2.2.2`. **Si no se cambia, el navegador puede seguir usando el `app.js` anterior hasta 10 minutos.**
 3. Guardar los cambios con git y subirlos: `git commit -am "…"` y `git push`.
 4. En uno o dos minutos GitHub Pages publica la nueva versión. Con internet, la próxima vez que se abra Hablemos ya carga la nueva.
 
