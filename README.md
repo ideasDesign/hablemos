@@ -1,6 +1,13 @@
-# Hablemos V1.2 — Crear conversaciones sin escribir
+# Hablemos V1.3 — Crear conversaciones sin escribir
 
 **Prototipo accesible para Android**. Diseñado para una persona que comprende texto y puede pulsar botones grandes, pero no puede hablar y tiene dificultad para escribir.
+
+## Cambios de la versión 1.3: audios de la familia dentro de Hablemos
+
+- Cuando un familiar manda un **audio de voz** por Telegram, el aviso y la conversación muestran **«🎤 Audio de 7 s»** con un botón grande **«▶ Escuchar audio»**. Diego lo escucha sin abrir Telegram, al volumen de Hablemos.
+- Con «Leer en voz alta los mensajes que llegan» activado, Hablemos dice «Mamá te mandó un audio» e intenta reproducirlo solo. Si el teléfono no lo permite, alcanza con tocar «Escuchar».
+- **Responder a un audio:** el mensaje citado lo vuelve a reproducir y aparecen respuestas para audios («Ya lo escuché, gracias», «¿Me lo podés escribir?», «No se escuchó bien»…). La IA no se usa para audios porque no puede escucharlos.
+- Los audios los trae el servidor desde Telegram. La app no ve ninguna clave de Telegram, y el servidor guarda en memoria los últimos 15 audios para no volver a descargarlos.
 
 ## Cambios de la versión 1.2: ayuda real y pantalla de respuestas más clara
 
@@ -226,8 +233,8 @@ Los datos (contactos, frases, palabras aprendidas) se guardan **solo en ese tel�
 
 ### Publicar una nueva versión
 
-1. Cambiar el nombre de la caché en `sw.js` (por ejemplo `hablemos-offline-v18` → `hablemos-offline-v19`), para actualizar la copia que se usa sin conexión.
-2. En `index.html`, cambiar la versión del script: `app.js?v=1.2` → `app.js?v=1.2.1`. **Si no se cambia, el navegador puede seguir usando el `app.js` anterior hasta 10 minutos.**
+1. Cambiar el nombre de la caché en `sw.js` (por ejemplo `hablemos-offline-v19` → `hablemos-offline-v20`), para actualizar la copia que se usa sin conexión.
+2. En `index.html`, cambiar la versión del script: `app.js?v=1.3` → `app.js?v=1.3.1`. **Si no se cambia, el navegador puede seguir usando el `app.js` anterior hasta 10 minutos.**
 3. Guardar los cambios con git y subirlos: `git commit -am "…"` y `git push`.
 4. En uno o dos minutos GitHub Pages publica la nueva versión. Con internet, la próxima vez que se abra Hablemos ya carga la nueva.
 

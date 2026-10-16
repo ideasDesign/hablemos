@@ -107,12 +107,13 @@ Cómo tienen que ser las respuestas:
 - Naturales y cálidas, como hablaría una persona adulta con su familia. Sin emojis.
 - No respondas el mensaje vos: devolvé solamente las opciones.`;
 let lastHelpAt = 0, lastHelpSent = 0;
+const audioCache = new Map(); // seq → audio descargado (los últimos 15, para no volver a bajarlos)
 const suggestCache = new Map(); // «chatId:seq» → respuestas (para no volver a pagar si se abre dos veces)
 const aiCalls = [];
 async function suggestReplies(chatId) {
   const thread = db.messages.filter(m => m.chatId === chatId).slice(-8);
   const last = [...thread].reverse().find(m => m.dir === 'in');
-  if (!last) return { replies: [] };
+  if (!last || last.audio) return { replies: [] };
   const key = chatId + ':' + last.seq;
   if (suggestCache.has(key)) return { replies: suggestCache.get(key), cached: true };
   // Tope de gasto: como máximo 60 pedidos por hora.
@@ -213,7 +214,7 @@ async function ensureWebhook() {
 function describe(m) {
   if (typeof m.text === 'string') return m.text;
   const caption = typeof m.caption === 'string' ? ': ' + m.caption : '';
-  if (m.voice || m.audio) return '🎤 Envió un audio. Abrí Telegram para escucharlo.';
+  if (m.voice || m.audio) { const d = (m.voice || m.audio).duration; return '🎤 Audio' + (d ? ' (' + d + ' s)' : ''); }
   if (m.photo) return '🖼️ Envió una foto' + caption;
   if (m.video || m.video_note) return '🎬 Envió un video' + caption;
   if (m.sticker) return (m.sticker.emoji || '🙂') + ' (sticker)';
@@ -234,6 +235,9 @@ function onUpdate(u) {
   const isStart = /^\/start\b/.test(text);
   const startCode = isStart ? (text.split(/\s+/)[1] || '') : '';
   const entry = { chatId, dir: 'in', text: text.slice(0, 4096), date: (m.date || Date.now() / 1000) * 1000, id: m.message_id };
+  // Audios: se guarda la referencia de Telegram para que la app pueda reproducirlos sin abrir Telegram.
+  const media = m.voice || m.audio;
+  if (media && typeof media.file_id === 'string') entry.audio = { fileId: media.file_id, duration: Number(media.duration) || 0, mime: String(media.mime_type || 'audio/ogg').slice(0, 40) };
   let p = db.people[chatId];
   const isNew = !p;
   if (!p) {
@@ -260,7 +264,7 @@ function onUpdate(u) {
     return;
   }
   addMessage(entry);
-  notifyAll({ title: '📩 ' + p.name, body: entry.text.slice(0, 300), tag: 'chat-' + chatId }).catch(() => {});
+  notifyAll({ title: '📩 ' + p.name, body: entry.audio ? '🎤 Te mandó un audio' : entry.text.slice(0, 300), tag: 'chat-' + chatId }).catch(() => {});
 }
 
 // Conecta a una persona: entrega lo que mandó mientras esperaba y (si corresponde) le da la bienvenida.
@@ -340,6 +344,24 @@ const server = http.createServer(async (req, res) => {
     if (isBlocked(ip)) return send(res, 429, { error: 'too-many-attempts' }, cors);
     if (!pinOk(req)) { registerFailure(ip); return send(res, 401, { error: 'bad-pin' }, cors); }
 
+    if (url.pathname === '/api/audio' && req.method === 'GET') {
+      const chatId = String(url.searchParams.get('chatId') || ''), seq = Number(url.searchParams.get('seq'));
+      const msg = db.messages.find(m => m.seq === seq && m.chatId === chatId && m.audio);
+      if (!msg) return send(res, 404, { error: 'no-audio' }, cors);
+      try {
+        let file = audioCache.get(seq);
+        if (!file) {
+          const info = await tg('getFile', { file_id: msg.audio.fileId });
+          const r = await fetch(`${TG_API}/file/bot${TOKEN}/${info.file_path}`);
+          if (!r.ok) throw new Error('descarga ' + r.status);
+          file = { body: Buffer.from(await r.arrayBuffer()), type: /^audio\//.test(msg.audio.mime) ? msg.audio.mime : 'audio/ogg' };
+          audioCache.set(seq, file);
+          if (audioCache.size > 15) audioCache.delete(audioCache.keys().next().value);
+        }
+        res.writeHead(200, { 'content-type': file.type, 'content-length': file.body.length, 'cache-control': 'private, max-age=3600', ...cors });
+        return res.end(file.body);
+      } catch (e) { console.error('No se pudo traer un audio de Telegram:', e.code || e.message); return send(res, 502, { error: 'audio-unavailable' }, cors); }
+    }
     if (url.pathname === '/api/status' && req.method === 'GET') {
       const b = await getBot();
       if (!webhookOk) await ensureWebhook();
@@ -358,7 +380,7 @@ const server = http.createServer(async (req, res) => {
           waiters.add(done); req.on('close', done);
         });
       }
-      const messages = db.messages.filter(m => m.seq > since).slice(-500);
+      const messages = db.messages.filter(m => m.seq > since).slice(-500).map(m => m.audio ? { ...m, audio: { duration: m.audio.duration } } : m);
       return send(res, 200, { seq: db.seq, pv: db.pv, reset, messages, people: publicPeople(), invite: db.invite, ai: !!ai }, cors);
     }
 

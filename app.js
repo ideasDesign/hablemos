@@ -140,7 +140,7 @@
       if(tg.threads&&typeof tg.threads==='object'){
         for(const [chatId,list] of Object.entries(tg.threads).slice(0,30)){
           if(!chatIdOk(chatId)||!Array.isArray(list))continue;
-          clean.threads[chatId]=list.filter(m=>m&&(m.dir==='in'||m.dir==='out')&&typeof m.text==='string'&&Number.isFinite(m.date)).slice(-100).map(m=>({dir:m.dir,text:m.text.slice(0,4096),date:m.date,...(Number.isInteger(m.id)?{id:m.id}:{})}));
+          clean.threads[chatId]=list.filter(m=>m&&(m.dir==='in'||m.dir==='out')&&typeof m.text==='string'&&Number.isFinite(m.date)).slice(-100).map(m=>({dir:m.dir,text:m.text.slice(0,4096),date:m.date,...(Number.isInteger(m.id)?{id:m.id}:{}),...(m.audio&&Number.isFinite(m.audio.d)?{audio:{d:m.audio.d}}:{})}));
         }
       }
       state.tg=clean;
@@ -282,6 +282,12 @@
     for(const o of question?['Sí','No','No sé','Después te digo']:['Ok','Gracias','Después te digo'])if(out.length<6)add(o);
     return {intent,options:out};
   }
+  function audioReplyOptions(){
+    const out=[];const seen=new Set();
+    Object.entries(state.replyLearned.audio||{}).sort((a,b)=>b[1]-a[1]).slice(0,3).forEach(([r])=>{if(!seen.has(r)){seen.add(r);out.push(r);}});
+    for(const r of ['Ya lo escuché, gracias','Sí','No','¿Me lo podés escribir?','No se escuchó bien','Después te contesto'])if(!seen.has(r)&&out.length<8){seen.add(r);out.push(r);}
+    return {intent:'audio',options:out};
+  }
   function learnReply(intent,text){
     const counts=state.replyLearned[intent]||(state.replyLearned[intent]={});
     if(!(text in counts)&&Object.keys(counts).length>=30)delete counts[Object.entries(counts).sort((a,b)=>a[1]-b[1])[0][0]];
@@ -399,8 +405,10 @@
       const c=state.contacts.find(x=>x.id===cid&&x.telegramId);
       if(!c){view='main';return boardItems();}
       const last=lastIncoming(c);
-      const {intent,options}=replyOptions(last?last.text:'');
-      const items=[tile('quote',last?c.name+': «'+last.text+'»':'Escribile a '+c.name,()=>{if(last)talk(c.name+' dice: '+last.text);},'🔊'),backTo(sub?'reply:'+cid:'main')];
+      const {intent,options}=last&&last.audio?audioReplyOptions():replyOptions(last?last.text:'');
+      const items=[last&&last.audio
+        ?tile('quote',c.name+' te mandó un audio'+(last.audio.d?' ('+last.audio.d+' s)':'')+'. Tocá para escucharlo',()=>playAudio(c,last),'▶')
+        :tile('quote',last?c.name+': «'+last.text+'»':'Escribile a '+c.name,()=>{if(last)talk(c.name+' dice: '+last.text);},'🔊'),backTo(sub?'reply:'+cid:'main')];
       if(sub&&replySubs[sub])for(const r of replySubs[sub])items.push(tile('reply',r,()=>chooseReply(r,c,intent)));
       else{
         const aiState=aiFor(c,last);
@@ -473,11 +481,13 @@
     for(const m of list){
       const row=document.createElement('div');row.className='bubble '+m.dir;
       const who=document.createElement('small');who.textContent=(m.dir==='in'?c.name:'Yo')+' · '+formatTime(m.date);
-      const text=document.createElement('p');text.textContent=m.text;
+      const text=document.createElement('p');text.textContent=m.audio?audioLabel(m):m.text;
       row.append(who,text);
       if(m.dir==='in'){
-        const say=document.createElement('button');say.type='button';say.className='bubble-say';say.textContent='🔊 Escuchar';
-        say.setAttribute('aria-label','Escuchar mensaje de '+c.name);say.addEventListener('click',()=>talk(m.text));row.append(say);
+        const say=document.createElement('button');say.type='button';say.className='bubble-say'+(m.audio?' audio':'');
+        say.textContent=m.audio?'▶ Escuchar audio':'🔊 Escuchar';
+        say.setAttribute('aria-label',(m.audio?'Escuchar audio de ':'Escuchar mensaje de ')+c.name);
+        say.addEventListener('click',()=>m.audio?playAudio(c,m):talk(m.text));row.append(say);
       }
       thread.append(row);
     }
@@ -635,10 +645,10 @@
     if(e.code===429)return 'Telegram pide esperar un momento antes de volver a enviar.';
     return 'No se pudo conectar con Telegram. Revisá la conexión e intentá de nuevo.';
   }
-  function pushThread(chatId,dir,text,date,id){
+  function pushThread(chatId,dir,text,date,id,extra={}){
     const list=state.tg.threads[chatId]||(state.tg.threads[chatId]=[]);
     if(Number.isInteger(id)&&list.some(m=>m.dir===dir&&m.id===id))return false; // ya estaba (evita duplicados)
-    list.push({dir,text:text.slice(0,4096),date,...(Number.isInteger(id)?{id}:{})});
+    list.push({dir,text:text.slice(0,4096),date,...(Number.isInteger(id)?{id}:{}),...extra});
     if(list.length>100)list.splice(0,list.length-100);
     const ids=Object.keys(state.tg.threads);
     if(ids.length>30){const oldest=ids.sort((a,b)=>(state.tg.threads[a].at(-1)?.date||0)-(state.tg.threads[b].at(-1)?.date||0))[0];delete state.tg.threads[oldest];}
@@ -704,9 +714,10 @@
     for(const m of Array.isArray(r.messages)?r.messages:[]){
       if(!m||!chatIdOk(String(m.chatId))||(m.dir!=='in'&&m.dir!=='out')||typeof m.text!=='string'||!Number.isInteger(m.seq))continue;
       const chatId=String(m.chatId);
-      const added=pushThread(chatId,m.dir,m.text,Number(m.date)||Date.now(),m.seq);
+      const extra=m.audio?{audio:{d:Number(m.audio.duration)||0}}:{};
+      const added=pushThread(chatId,m.dir,m.text,Number(m.date)||Date.now(),m.seq,extra);
       // Al conectar por primera vez se cargan los mensajes viejos sin anunciarlos.
-      if(added&&m.dir==='in'&&!first){const c=contactByChat(chatId);if(c)showIncoming(c,m.text);}
+      if(added&&m.dir==='in'&&!first){const c=contactByChat(chatId);if(c)showIncoming(c,m.text,{...m,id:m.seq,...extra});}
     }
     if(Number.isInteger(r.seq))state.tg.seq=r.seq;
     state.tg.synced=true;
@@ -820,11 +831,37 @@
     }catch(e){}
     try{if(navigator.vibrate)navigator.vibrate([300,120,300]);}catch(e){}
   }
-  function showIncoming(contact,text){
-    incomingContactId=contact.id;
-    $('incomingName').textContent='📩 '+contact.name+':';$('incomingText').textContent=text;$('incoming').hidden=false;
+  // ===== V1.3: audios de la familia, dentro de Hablemos =====
+  const audioUrls=new Map();let playing=null;
+  const audioLabel=m=>'🎤 Audio'+(m.audio&&m.audio.d?' de '+m.audio.d+' s':'');
+  async function playAudio(c,m){
+    if(!isServer()||!m||!m.audio||!Number.isInteger(m.id)){notify('Este audio se escucha en Telegram.');return;}
+    try{
+      if(window.speechSynthesis)speechSynthesis.cancel();
+      if(playing){playing.pause();playing=null;}
+      let url=audioUrls.get(m.id);
+      if(!url){
+        notify('Cargando el audio…');
+        const r=await fetch(state.tg.server.url+'/api/audio?chatId='+encodeURIComponent(c.telegramId)+'&seq='+m.id,{headers:{authorization:'Bearer '+state.tg.server.pin},cache:'no-store'});
+        if(!r.ok)throw new Error('HTTP '+r.status);
+        url=URL.createObjectURL(await r.blob());audioUrls.set(m.id,url);
+        if(audioUrls.size>15){const [k,u]=audioUrls.entries().next().value;URL.revokeObjectURL(u);audioUrls.delete(k);}
+      }
+      const a=new Audio(url);a.volume=Math.max(.1,state.volume);playing=a;
+      await a.play();
+      notify('🔊 Escuchando el audio de '+c.name);
+    }catch(e){notify(e&&e.name==='NotAllowedError'?'Tocá «Escuchar» para oír el audio.':'No se pudo reproducir el audio. Probá de nuevo.');}
+  }
+  let incomingMsg=null;
+  function showIncoming(contact,text,msg=null){
+    incomingContactId=contact.id;incomingMsg=msg&&msg.audio?msg:null;
+    $('incomingName').textContent='📩 '+contact.name+':';$('incomingText').textContent=incomingMsg?audioLabel(incomingMsg):text;$('incoming').hidden=false;
+    $('incomingSay').textContent=incomingMsg?'▶ Escuchar audio':'🔊 Escuchar';
     chime();
-    if(state.tg.autoRead)setTimeout(()=>talk(contact.name+' dice: '+text),state.tg.chime?750:0);
+    if(state.tg.autoRead){
+      if(incomingMsg)setTimeout(()=>{talk(contact.name+' te mandó un audio.');setTimeout(()=>playAudio(contact,incomingMsg),2200);},state.tg.chime?750:0);
+      else setTimeout(()=>talk(contact.name+' dice: '+text),state.tg.chime?750:0);
+    }
   }
   function formatTime(ms){
     const d=new Date(ms),today=new Date();
@@ -1359,7 +1396,10 @@
   // El service worker avisa que llegó un push: se consulta enseguida para mostrar el mensaje.
   if('serviceWorker' in navigator)navigator.serviceWorker.addEventListener('message',e=>{if(e.data&&e.data.type==='hablemos-push'&&tgReady())kickPolling();});
   $('tgDisconnect').addEventListener('click',disconnectTelegram);
-  $('incomingSay').addEventListener('click',()=>talk($('incomingText').textContent));
+  $('incomingSay').addEventListener('click',()=>{
+    const c=state.contacts.find(x=>x.id===incomingContactId);
+    if(incomingMsg&&c)playAudio(c,incomingMsg);else talk($('incomingText').textContent);
+  });
   // Responder: muestra respuestas listas para lo que preguntaron (o el tablero, si no es una persona de Telegram).
   $('incomingReply').addEventListener('click',()=>{
     const c=state.contacts.find(x=>x.id===incomingContactId);
