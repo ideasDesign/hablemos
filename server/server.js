@@ -9,7 +9,16 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
-const TOKEN = (process.env.TELEGRAM_TOKEN || '').trim();
+// Corrige errores comunes al pegar el token: comillas, espacios o saltos de línea, y la palabra «bot» delante.
+const RAW_TOKEN = process.env.TELEGRAM_TOKEN || '';
+const TOKEN = RAW_TOKEN.replace(/\s+/g, '').replace(/^["'`]+|["'`]+$/g, '').replace(/^bot(?=\d)/i, '');
+// Describe qué tiene de raro el token, sin mostrarlo nunca.
+function tokenProblem() {
+  if (!RAW_TOKEN.trim()) return 'TELEGRAM_TOKEN está vacío.';
+  if (/^\d{6,15}:[\w-]{30,60}$/.test(TOKEN)) return '';
+  if (!TOKEN.includes(':')) return 'TELEGRAM_TOKEN no tiene los dos puntos (:). Tiene que tener la forma 123456789:AAH… tal como lo da @BotFather.';
+  return `TELEGRAM_TOKEN no tiene la forma 123456789:AAH… (tiene ${TOKEN.length} caracteres). Pegá solo el token, sin otras palabras del mensaje de @BotFather.`;
+}
 const PIN = (process.env.HABLEMOS_PIN || '').trim();
 const PORT = Number(process.env.PORT) || 3000;
 const TG_API = (process.env.TELEGRAM_API_BASE || 'https://api.telegram.org').replace(/\/$/, '');
@@ -82,8 +91,15 @@ async function tg(method, params) {
 let bot = null, botError = '';
 async function getBot() {
   if (bot || !TOKEN) return bot;
-  try { const me = await tg('getMe', {}); bot = { id: me.id, username: me.username, name: me.first_name || me.username }; botError = ''; }
-  catch (e) { botError = e.code === 401 || e.code === 404 ? 'Telegram no reconoce el token (TELEGRAM_TOKEN).' : e.message; }
+  try {
+    const me = await tg('getMe', {}); bot = { id: me.id, username: me.username, name: me.first_name || me.username }; botError = '';
+    console.log('Bot conectado: @' + bot.username);
+  } catch (e) {
+    botError = e.code === 401 ? 'Telegram rechazó el token (TELEGRAM_TOKEN): puede ser uno viejo, reemplazado con /revoke.'
+      : e.code === 404 ? (tokenProblem() || 'Telegram no reconoce el token (TELEGRAM_TOKEN). Copialo de nuevo desde @BotFather.')
+      : e.message;
+    console.error('No se pudo conectar con el bot:', botError);
+  }
   return bot;
 }
 let webhookOk = false, webhookError = '';
@@ -274,6 +290,8 @@ load();
 server.listen(PORT, () => {
   console.log(`Hablemos servidor escuchando en el puerto ${PORT}. Datos en ${FILE}${PERSISTENT ? '' : ' (NO persistente: agregá un Volume en Railway)'}.`);
   if (!TOKEN) console.warn('Falta TELEGRAM_TOKEN.');
+  else if (tokenProblem()) console.warn('Atención:', tokenProblem());
+  else if (TOKEN !== RAW_TOKEN.trim()) console.log('TELEGRAM_TOKEN tenía espacios, comillas o «bot» delante: se corrigió automáticamente.');
   if (!PIN) console.warn('Falta HABLEMOS_PIN.');
   getBot().then(() => ensureWebhook());
   // Reintenta el webhook cada minuto hasta que quede configurado.
