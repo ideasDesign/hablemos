@@ -107,9 +107,10 @@ async function notifyAll(payload) {
     } catch (e) {
       // 404/410: el teléfono ya no recibe avisos (se desinstaló o se revocó el permiso).
       if (e.statusCode === 404 || e.statusCode === 410) { db.pushSubs = db.pushSubs.filter(x => x.endpoint !== sub.endpoint); save(); }
-      else console.error('No se pudo enviar un aviso push:', e.statusCode || e.message);
+      else console.error('No se pudo enviar un aviso push:', e.statusCode || e.message, (e.body || '').slice(0, 200));
     }
   }
+  console.log(`Aviso push «${payload.tag}» enviado a ${sent} de ${db.pushSubs.length} teléfono(s).`);
   return sent;
 }
 

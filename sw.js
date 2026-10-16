@@ -1,4 +1,4 @@
-const CACHE='hablemos-offline-v14';
+const CACHE='hablemos-offline-v15';
 const FILES=['./','./index.html','./app.js','./manifest.webmanifest','./assets/icon-192.png','./assets/icon-512.png'];
 self.addEventListener('install',event=>{
   event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(FILES)).then(()=>self.skipWaiting()));
@@ -24,6 +24,8 @@ self.addEventListener('fetch',event=>{
 });
 // Avisos de mensajes nuevos (push): se muestran aunque Hablemos esté cerrada.
 // Si la app ya está en pantalla, el aviso entra sin sonido, porque la app ya suena, vibra y lo lee en voz alta.
+// El aviso de prueba siempre suena, para poder comprobar que funciona.
+// Importante: un aviso sin sonido no puede llevar vibración (el navegador lo rechaza y no muestra nada).
 self.addEventListener('push',event=>{
   let data={};
   try{data=event.data?event.data.json():{};}catch(e){data={body:event.data?event.data.text():''};}
@@ -31,13 +33,16 @@ self.addEventListener('push',event=>{
     const windows=await self.clients.matchAll({type:'window',includeUncontrolled:true});
     const visible=windows.some(c=>c.visibilityState==='visible');
     for(const c of windows)c.postMessage({type:'hablemos-push'});
-    await self.registration.showNotification(data.title||'Hablemos',{
+    const silent=visible&&data.tag!=='test';
+    const options={
       body:data.body||'Tenés un mensaje nuevo.',
       icon:'./assets/icon-192.png',badge:'./assets/icon-192.png',
-      tag:data.tag||'hablemos',renotify:true,silent:visible,
-      vibrate:[300,120,300],requireInteraction:false,
+      tag:data.tag||'hablemos',renotify:true,silent,
       data:{url:'./index.html'}
-    });
+    };
+    if(!silent)options.vibrate=[300,120,300];
+    try{await self.registration.showNotification(data.title||'Hablemos',options);}
+    catch(e){await self.registration.showNotification(data.title||'Hablemos',{body:options.body,icon:options.icon,tag:options.tag});}
   })());
 });
 // Al tocar el aviso: abre Hablemos (o la trae al frente si ya estaba abierta).
