@@ -101,7 +101,7 @@
   const repeatOptions=[0,500,1000,2000];
   const initial = {contacts:[],selectedContactId:null,ownPhrases:[],message:'',category:'frecuentes',combine:false,large:false,contrast:false,
     tokens:[],punctuation:'.',buildCategory:'inicio',savedMessages:[],customBlocks:[],mode:'build',
-    suggest:true,aiReplies:true,learned:{},replyLearned:{},voiceURI:'',rate:.9,pitch:1,volume:1,holdMs:0,repeatMs:0,lastBackup:0};
+    suggest:true,aiReplies:true,pictos:true,learned:{},replyLearned:{},voiceURI:'',rate:.9,pitch:1,volume:1,holdMs:0,repeatMs:0,lastBackup:0};
   const clampNumber=(value,min,max,fallback)=>typeof value==='number'&&isFinite(value)?Math.min(max,Math.max(min,value)):fallback;
   // V0.4: Telegram. threads = {chatId: [{dir:'in'|'out', text, date}]}; pending = personas que tocaron «Iniciar» y aún no están vinculadas.
   // V0.6: server = {url, pin} cuando Hablemos se conecta a su propio servidor (el token queda en el servidor). seq/pv = hasta dónde se sincronizó.
@@ -158,6 +158,7 @@
     if(['build','quick','saved'].includes(stored.mode))state.mode=stored.mode;
     if(typeof stored.suggest==='boolean')state.suggest=stored.suggest;
     if(typeof stored.aiReplies==='boolean')state.aiReplies=stored.aiReplies;
+    if(typeof stored.pictos==='boolean')state.pictos=stored.pictos;
     if(stored.replyLearned&&typeof stored.replyLearned==='object'&&!Array.isArray(stored.replyLearned)){
       for(const [intent,counts] of Object.entries(stored.replyLearned).slice(0,40)){
         if(!/^[a-z-]{2,20}$/.test(intent)||!counts||typeof counts!=='object')continue;
@@ -432,9 +433,22 @@
   }
   function boardCols(){const w=$('board').clientWidth;return w>=900?4:w>=560?3:2;}
   function tileHeight(){return Math.round(88*(state.large?1.15:1));}
+  // ===== V1.4: pictogramas de ARASAAC y colores por tipo de palabra =====
+  // Autor de los pictogramas: Sergio Palao. Origen: ARASAAC (https://arasaac.org). Licencia: CC BY-NC-SA. Propiedad: Gobierno de Aragón.
+  const pictoUrl=id=>'https://static.arasaac.org/pictograms/'+id+'/'+id+'_300.png';
+  const pictoFor=label=>state.pictos&&window.HABLEMOS_PICTOS?window.HABLEMOS_PICTOS[label]||null:null;
+  // Colores de comunicación aumentativa: acciones en verde, personas en amarillo, cosas en naranja, sentimientos en azul…
+  const catClass=label=>{const k=categoryOf(label);return k?' cat-'+k:'';};
   function makeTile(t){
-    const b=document.createElement('button');b.type='button';b.className='tile '+t.kind;
-    if(t.icon){const i=document.createElement('span');i.className='ico';i.setAttribute('aria-hidden','true');i.textContent=t.icon;b.append(i);}
+    const b=document.createElement('button');b.type='button';
+    const isWord=t.kind==='word'||t.kind==='learned';
+    b.className='tile '+t.kind+(isWord?catClass(t.label):'');
+    const picto=(isWord||t.kind==='phrase'||t.kind==='reply')?pictoFor(t.label):null;
+    if(picto){
+      const img=document.createElement('img');img.className='picto';img.alt='';img.loading='lazy';img.decoding='async';img.src=pictoUrl(picto);
+      img.addEventListener('error',()=>{img.remove();if(t.icon){const i=document.createElement('span');i.className='ico';i.setAttribute('aria-hidden','true');i.textContent=t.icon;b.prepend(i);}});
+      b.append(img);b.classList.add('has-picto');
+    }else if(t.icon){const i=document.createElement('span');i.className='ico';i.setAttribute('aria-hidden','true');i.textContent=t.icon;b.append(i);}
     const l=document.createElement('span');l.className='lbl';l.textContent=t.label;b.append(l);
     if(t.extra){const x=document.createElement('span');x.className='badge';x.textContent=t.extra;b.append(x);}
     b.setAttribute('aria-label',(t.kind==='word'||t.kind==='learned'?'Agregar: ':t.kind==='reply'?'Responder: ':t.kind==='quote'?'Escuchar: ':'')+t.label+(t.extra?', '+t.extra:''));
@@ -1235,7 +1249,7 @@
   function updatePrefs(){
     document.body.classList.toggle('large',state.large);document.body.classList.toggle('contrast',state.contrast);
     $('largerText').checked=state.large;$('highContrast').checked=state.contrast;
-    $('suggestToggle').checked=state.suggest;
+    $('suggestToggle').checked=state.suggest;$('pictosToggle').checked=state.pictos;
     $('holdSelect').value=String(state.holdMs);$('repeatSelect').value=String(state.repeatMs);
     document.body.classList.toggle('hold-on',state.holdMs>0);
     document.body.style.setProperty('--hold',state.holdMs+'ms');
@@ -1441,6 +1455,19 @@
     startPolling();
   });
   renderAll();updateOffline();startPolling();if(tgReady())requestPersist();
+  function prefetchPictos(){
+    if(!state.pictos||!window.HABLEMOS_PICTOS||!navigator.onLine||!('serviceWorker' in navigator))return;
+    // La marca depende de la lista de pictogramas: si la lista cambia, se vuelven a guardar.
+    const ids=[...new Set(Object.values(window.HABLEMOS_PICTOS))].sort((x,y)=>x-y);
+    const mark=ids.length+':'+ids.reduce((h,id)=>(h*31+id)%1000000007,7);
+    let done=false;try{done=localStorage.getItem('hablemos.pictosGuardados')===mark;}catch(e){}
+    if(done)return;
+    let i=0;const next=()=>{if(i>=ids.length){try{localStorage.setItem('hablemos.pictosGuardados',mark);}catch(e){}return;}
+      fetch(pictoUrl(ids[i++]),{mode:'no-cors'}).catch(()=>{}).finally(()=>setTimeout(next,40));};
+    navigator.serviceWorker.ready.then(()=>setTimeout(next,3000));
+  }
+  prefetchPictos();
+  $('pictosToggle').addEventListener('change',e=>{state.pictos=e.target.checked;persist();renderScreen();prefetchPictos();});
   // Secure origin is required for an installable Android PWA and service worker.
   if('serviceWorker' in navigator && (location.protocol==='https:'||location.hostname==='localhost')){
     window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));

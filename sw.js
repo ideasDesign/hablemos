@@ -1,15 +1,24 @@
-const CACHE='hablemos-offline-v19';
-const FILES=['./','./index.html','./app.js','./manifest.webmanifest','./assets/icon-192.png','./assets/icon-512.png'];
+const CACHE='hablemos-offline-v20';
+const PICTOS_CACHE='hablemos-pictos';
+const FILES=['./','./index.html','./app.js','./pictos.js','./manifest.webmanifest','./assets/icon-192.png','./assets/icon-512.png'];
 self.addEventListener('install',event=>{
   event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(FILES)).then(()=>self.skipWaiting()));
 });
 self.addEventListener('activate',event=>{
-  event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>key!==CACHE).map(key=>caches.delete(key)))).then(()=>self.clients.claim()));
+  event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>key!==CACHE&&key!==PICTOS_CACHE).map(key=>caches.delete(key)))).then(()=>self.clients.claim()));
 });
 // Primero la red, para que siempre se use la última versión publicada (así no conviven versiones viejas y nuevas).
 // Si no hay internet o la red tarda más de 3 segundos, se usa la copia guardada.
 self.addEventListener('fetch',event=>{
   const request=event.request;
+  // Pictogramas de ARASAAC: se guardan la primera vez y después funcionan sin internet.
+  if(request.method==='GET'&&request.url.startsWith('https://static.arasaac.org/pictograms/')){
+    event.respondWith(caches.open(PICTOS_CACHE).then(async cache=>{
+      const hit=await cache.match(request,{ignoreVary:true});if(hit)return hit;
+      const response=await fetch(request);cache.put(request,response.clone()).catch(()=>{});return response;
+    }));
+    return;
+  }
   if(request.method!=='GET'||new URL(request.url).origin!==self.location.origin)return;
   event.respondWith((async()=>{
     const cache=await caches.open(CACHE);

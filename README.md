@@ -1,6 +1,16 @@
-# Hablemos V1.3 — Crear conversaciones sin escribir
+# Hablemos V1.4 — Crear conversaciones sin escribir
 
 **Prototipo accesible para Android**. Diseñado para una persona que comprende texto y puede pulsar botones grandes, pero no puede hablar y tiene dificultad para escribir.
+
+## Cambios de la versión 1.4: pictogramas y diseño moderno
+
+- **Pictogramas en los botones** (152 palabras y frases), para reconocerlos de un vistazo sin leer. Los dibujos que no correspondían se revisaron uno por uno y se eligieron a mano: por ejemplo «Quiero» muestra a alguien estirándose hacia lo que quiere, no a dos enamorados. Se pueden ocultar en ⚙ → Pantalla → «Mostrar pictogramas en los botones».
+- Se guardan en el teléfono la primera vez, así que después **funcionan sin internet**.
+- **Colores por tipo de palabra**, según la clave de colores habitual en comunicación aumentativa: acciones en verde, personas en amarillo, cosas y lugares en naranja, cuándo en celeste, sentimientos en azul, preguntas en violeta y respuestas en rosa.
+- **Diseño moderno:** fondo suave con degradé, tarjetas con sombras suaves, carpetas y personas destacadas, y botones de acción más visibles.
+- Para volver a buscar los pictogramas: `node tools/build-pictos.js app.js pictos.js`. Después hay que revisar el resultado y reaplicar las elecciones manuales.
+
+**Créditos de los pictogramas:** autor Sergio Palao. Origen: ARASAAC (https://arasaac.org). Licencia: CC BY-NC-SA. Propiedad: Gobierno de Aragón (España).
 
 ## Cambios de la versión 1.3: audios de la familia dentro de Hablemos
 
@@ -233,8 +243,8 @@ Los datos (contactos, frases, palabras aprendidas) se guardan **solo en ese tel�
 
 ### Publicar una nueva versión
 
-1. Cambiar el nombre de la caché en `sw.js` (por ejemplo `hablemos-offline-v19` → `hablemos-offline-v20`), para actualizar la copia que se usa sin conexión.
-2. En `index.html`, cambiar la versión del script: `app.js?v=1.3` → `app.js?v=1.3.1`. **Si no se cambia, el navegador puede seguir usando el `app.js` anterior hasta 10 minutos.**
+1. Cambiar el nombre de la caché en `sw.js` (por ejemplo `hablemos-offline-v20` → `hablemos-offline-v21`), para actualizar la copia que se usa sin conexión.
+2. En `index.html`, cambiar la versión del script: `app.js?v=1.4` (y `pictos.js?v=1.4`) → `app.js?v=1.4.1`. **Si no se cambia, el navegador puede seguir usando el `app.js` anterior hasta 10 minutos.**
 3. Guardar los cambios con git y subirlos: `git commit -am "…"` y `git push`.
 4. En uno o dos minutos GitHub Pages publica la nueva versión. Con internet, la próxima vez que se abra Hablemos ya carga la nueva.
 
