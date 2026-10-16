@@ -98,10 +98,11 @@
   };
   const START='^';
   const holdOptions=[0,500,1000,1500,2000];
+  const scanOptions=[0,1000,1500,2000,3000];
   const repeatOptions=[0,500,1000,2000];
   const initial = {contacts:[],selectedContactId:null,ownPhrases:[],message:'',category:'frecuentes',combine:false,large:false,contrast:false,
     tokens:[],punctuation:'.',buildCategory:'inicio',savedMessages:[],customBlocks:[],mode:'build',
-    suggest:true,aiReplies:true,pictos:true,cloudVoice:true,learned:{},replyLearned:{},phraseLearned:{},voiceURI:'',rate:.9,pitch:1,volume:1,holdMs:0,repeatMs:0,lastBackup:0};
+    suggest:true,aiReplies:true,pictos:true,cloudVoice:true,learned:{},replyLearned:{},phraseLearned:{},voiceURI:'',rate:.9,pitch:1,volume:1,holdMs:0,repeatMs:0,scanMs:0,lastBackup:0};
   const clampNumber=(value,min,max,fallback)=>typeof value==='number'&&isFinite(value)?Math.min(max,Math.max(min,value)):fallback;
   // V0.4: Telegram. threads = {chatId: [{dir:'in'|'out', text, date}]}; pending = personas que tocaron «Iniciar» y aún no están vinculadas.
   // V0.6: server = {url, pin} cuando Hablemos se conecta a su propio servidor (el token queda en el servidor). seq/pv = hasta dónde se sincronizó.
@@ -193,6 +194,7 @@
     state.volume=clampNumber(stored.volume,.1,1,state.volume);
     if(holdOptions.includes(stored.holdMs))state.holdMs=stored.holdMs;
     if(repeatOptions.includes(stored.repeatMs))state.repeatMs=stored.repeatMs;
+    if(scanOptions.includes(stored.scanMs))state.scanMs=stored.scanMs;
     if(Number.isFinite(stored.lastBackup)&&stored.lastBackup>0)state.lastBackup=stored.lastBackup;
   }
   applyStored(loadStored(STORE_KEY)||loadStored('hablemos.v2')||loadStored('hablemos.v1'));
@@ -1362,6 +1364,8 @@
     if(state.holdMs)tips.push('Mantené presionado cada botón '+(state.holdMs/1000).toLocaleString('es-AR')+' s para elegirlo.');
     if(state.repeatMs)tips.push('Los toques repetidos se ignoran durante '+(state.repeatMs/1000).toLocaleString('es-AR')+' s.');
     $('touchHint').textContent=tips.join(' ');$('touchHint').hidden=!tips.length;
+    $('scanSelect').value=String(state.scanMs);
+    if(state.scanMs)startScan();else stopScan();
   }
   // V0.3: protección de toques. Solo afecta a los botones del tablero, no a los formularios de configuración.
   // Los diálogos con data-board (como la confirmación de envío) también están protegidos.
@@ -1398,6 +1402,78 @@
       lastAccepted=now;
     }
   },true);
+  // ===== V2.1: modo barrido =====
+  // Un recuadro amarillo pasa por cada botón, uno por uno. Para elegir el resaltado se toca en cualquier lugar
+  // de la pantalla, o se aprieta un pulsador (Bluetooth o USB, que funciona como Espacio o Enter).
+  // Recorre el tablero, después Borrar/Hablar/Enviar y al final «Necesito ayuda». En «¿A quién se lo mando?» y
+  // en la ayuda recorre las opciones de esa ventana. La configuración se abre igual: manteniendo apretado ⚙.
+  let scanTimer=null,scanIdx=-1,scanEl=null,lastScanPick=0,gearDownAt=0;
+  const scanning=()=>state.scanMs>0;
+  const visible=el=>!!(el&&!el.hidden&&!el.disabled&&el.getClientRects().length&&getComputedStyle(el).visibility!=='hidden');
+  function scanTargets(){
+    const dialogs=[...document.querySelectorAll('dialog[open]')];
+    if(dialogs.length){
+      const top=dialogs[dialogs.length-1];
+      // Solo se barren las ventanas pensadas para Diego; en las de configuración se pausa.
+      return top.hasAttribute('data-board')?[...top.querySelectorAll('button')].filter(visible):null;
+    }
+    const all=[...document.querySelectorAll('.app button')].filter(b=>b.id!=='settingsOpen'&&!b.classList.contains('aiwait')&&visible(b));
+    const help=all.filter(b=>b.id==='helpBtn');
+    return [...all.filter(b=>b.id!=='helpBtn'),...help];
+  }
+  function scanMark(el){
+    if(scanEl&&scanEl!==el)scanEl.classList.remove('scan-focus');
+    scanEl=el;if(el){el.classList.add('scan-focus');}
+  }
+  function scanStep(){
+    clearTimeout(scanTimer);
+    if(!scanning())return;
+    const list=scanTargets();
+    if(list===null){scanMark(null);scanIdx=-1;}
+    else if(list.length){
+      // Si el botón resaltado sigue en pantalla, se avanza desde él; si la pantalla cambió, se empieza de nuevo.
+      const at=scanEl?list.indexOf(scanEl):-1;
+      scanIdx=at>=0?(at+1)%list.length:(scanIdx<0||scanIdx>=list.length?0:scanIdx);
+      scanMark(list[scanIdx]);
+    }
+    scanTimer=setTimeout(scanStep,state.scanMs);
+  }
+  function startScan(){document.body.classList.add('scan-on');if(!scanTimer){scanIdx=-1;scanStep();}}
+  function stopScan(){clearTimeout(scanTimer);scanTimer=null;scanMark(null);scanIdx=-1;document.body.classList.remove('scan-on');}
+  function scanPick(){
+    const now=Date.now();
+    if(now-lastScanPick<400)return; // un rebote del dedo no elige dos veces
+    if(!scanEl||!document.contains(scanEl)||!visible(scanEl)){scanStep();return;}
+    lastScanPick=now;
+    const el=scanEl;scanMark(null);scanIdx=-1;
+    try{if(navigator.vibrate)navigator.vibrate(30);}catch(err){}
+    el.click();
+    // Después de elegir, se vuelve a empezar desde el primer botón de lo que quedó en pantalla.
+    clearTimeout(scanTimer);scanTimer=setTimeout(scanStep,Math.min(state.scanMs,800));
+  }
+  const scanPaused=()=>scanTargets()===null;
+  // Se escucha en window (antes que todo lo demás), para que el toque no llegue al botón que está debajo del dedo.
+  window.addEventListener('pointerdown',e=>{
+    if(!scanning()||scanPaused()||e.button>0)return;
+    if(e.target instanceof Element&&e.target.closest('#settingsOpen')){gearDownAt=Date.now();return;} // ⚙ sigue abriéndose al mantenerlo
+    e.preventDefault();e.stopPropagation();
+    scanPick();
+  },true);
+  window.addEventListener('pointerup',e=>{
+    if(!scanning()||!gearDownAt)return;
+    const held=Date.now()-gearDownAt;gearDownAt=0;
+    if(held<900&&!scanPaused())scanPick(); // un toque corto sobre ⚙ también elige
+  },true);
+  window.addEventListener('click',e=>{
+    if(!scanning()||scanPaused()||!e.isTrusted||e.detail===0)return;
+    e.preventDefault();e.stopImmediatePropagation(); // el clic real ya se usó para elegir el botón resaltado
+  },true);
+  window.addEventListener('contextmenu',e=>{if(scanning()&&!scanPaused())e.preventDefault();},true);
+  window.addEventListener('keydown',e=>{
+    if(!scanning()||scanPaused()||e.repeat)return;
+    if(e.key===' '||e.key==='Enter'){e.preventDefault();e.stopPropagation();scanPick();}
+  },true);
+  $('scanSelect').addEventListener('change',e=>{state.scanMs=Number(e.target.value);persist();updatePrefs();});
   $('msgStrip').addEventListener('click',()=>{if(state.message.trim())speakMessage();else notify('Tocá las palabras de abajo para armar tu mensaje.');});
   $('eraseBtn').addEventListener('click',()=>{if(!state.message.trim()&&!state.tokens.length){notify('No hay nada para borrar.');return;}eraseLast();});
   $('speakBtn').addEventListener('click',()=>{if(!state.message.trim()){notify('Primero armá un mensaje.');return;}speakMessage();});

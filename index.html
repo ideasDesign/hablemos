@@ -9,7 +9,7 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Hablemos">
-  <title>Hablemos 2.0 · Conversaciones sin escribir</title>
+  <title>Hablemos 2.1 · Conversaciones sin escribir</title>
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./assets/icon-192.png" type="image/png">
   <style>
@@ -346,6 +346,10 @@
     .tile.back,.tile.nav{background:#e7ebfb;border-color:#cdd5f2;color:#2a3566}
     .tile.back svg.ico,.tile.nav svg.ico{color:#4a5a92}
     .tile.reply{border-left-color:#3f62c9}.tile.reply svg.ico{color:#3f62c9}
+    /* V2.1: modo barrido */
+    body.scan-on .app button,body.scan-on dialog[data-board] button{transition:transform .12s ease}
+    .scan-focus{outline:6px solid #ffd43b !important;outline-offset:3px;transform:scale(1.04);position:relative;z-index:5;box-shadow:0 0 0 10px #ffd43b40,0 8px 24px #0006 !important}
+    @media(prefers-reduced-motion:reduce){.scan-focus{transform:none}}
     /* V2.0: frases completadas con IA */
     .tile.aiwait{background:#ffffff14;border:2px dashed #ffffff55;color:#dfe6ff;box-shadow:none;pointer-events:none}
     .tile.aiwait svg.ico{color:#c9d4ff;animation:aipulse 1.4s ease-in-out infinite}
@@ -528,6 +532,17 @@
       </div>
       <p class="formhint">Si los datos se borran cada vez que se cierra Chrome, revisá en Chrome: <b>Configuración → Privacidad y seguridad → Cookies de terceros</b>, y que esté <b>desactivado</b> «Borrar cookies y datos de sitios al cerrar todas las ventanas». Tampoco usar ventanas de incógnito.</p>
 
+      <h3 class="settings-group">Modo barrido</h3>
+      <label class="field" for="scanSelect">Resaltar los botones uno por uno</label>
+      <select id="scanSelect" class="forminput">
+        <option value="0">Desactivado: se toca cada botón</option>
+        <option value="1000">Cada 1 segundo</option>
+        <option value="1500">Cada 1,5 segundos</option>
+        <option value="2000">Cada 2 segundos</option>
+        <option value="3000">Cada 3 segundos</option>
+      </select>
+      <p class="formhint">Para cuando tocar un botón en particular cueste mucho. Un recuadro amarillo pasa por cada botón; cuando está en el que querés, tocá en <b>cualquier lugar</b> de la pantalla. También funciona con un pulsador Bluetooth o USB. La configuración se sigue abriendo manteniendo apretado ⚙.</p>
+
       <h3 class="settings-group">Protección de toques</h3>
       <label class="field" for="holdSelect">Mantener presionado para elegir</label>
       <select id="holdSelect" class="forminput">
@@ -698,6 +713,6 @@
   </dialog>
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
   <script src="./icons.js?v=1.5" defer></script>
-  <script src="./app.js?v=2.0" defer></script>
+  <script src="./app.js?v=2.1" defer></script>
 </body>
 </html>
