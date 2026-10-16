@@ -28,17 +28,29 @@
 
 ## Probar el prototipo
 
-### Demostración de un solo archivo
+### Dirección publicada
 
-Se incluye por separado `Hablemos_v02_Demo.html`. Puede abrirse como HTML en navegadores que permitan JavaScript en archivos locales. No será una aplicación instalable ni tendrá almacenamiento fiable en todos los navegadores si se abre con `file://`.
+La app está publicada con GitHub Pages en **https://ideasdesign.github.io/hablemos/**
 
-### Instalar en Android como PWA
+### Instalar en Android
 
-1. Descomprimir `Hablemos_Android_v03.zip`.
-2. Subir el contenido de la carpeta `hablemos_v03/` a un alojamiento **HTTPS** para sitios estáticos, conservando todos los archivos y las subcarpetas.
-3. Abrir esa dirección en **Chrome para Android**.
-4. Usar el menú de Chrome: **Instalar aplicación** o **Agregar a pantalla principal**, según lo que aparezca.
-5. Abrir el nuevo icono **Hablemos**.
+1. En el teléfono, abrir **https://ideasdesign.github.io/hablemos/** con **Chrome para Android** (con internet).
+2. Esperar a que cargue por completo.
+3. Tocar el menú de Chrome (⋮) y elegir **Instalar aplicación** o **Agregar a pantalla principal**, según lo que aparezca.
+4. Abrir el nuevo icono **Hablemos** desde la pantalla de inicio. Se abre a pantalla completa, sin la barra de Chrome.
+5. Para comprobar que funciona sin conexión: activar el modo avión y abrir la app. Debe cargar igual (WhatsApp no funcionará hasta volver a tener conexión).
+
+Los datos (contactos, frases, palabras aprendidas) se guardan **solo en ese teléfono**: no viajan a GitHub ni a ningún servidor.
+
+### Publicar una nueva versión
+
+1. Cambiar el nombre de la caché en `sw.js` (por ejemplo `hablemos-offline-v3` → `hablemos-offline-v4`). **Si no se cambia, los teléfonos que ya la instalaron pueden seguir mostrando la versión anterior.**
+2. Guardar los cambios con git y subirlos: `git commit -am "…"` y `git push`.
+3. En uno o dos minutos GitHub Pages publica la nueva versión. En el teléfono, cerrar la app y volver a abrirla (a veces hace falta abrirla dos veces).
+
+### Probar en la computadora
+
+Abrir `index.html` directamente (`file://`) no sirve: el navegador bloquea el almacenamiento y el modo sin conexión. Usar un servidor local, por ejemplo `py -m http.server 8765` en la carpeta del proyecto, y abrir `http://localhost:8765`.
 
 No hace falta backend, base de datos, cuenta, API ni servidor para almacenar datos de la app. La primera instalación necesita Internet. El tablero puede funcionar sin conexión posteriormente si todos sus recursos quedaron almacenados en caché y el navegador lo permite; WhatsApp requiere conexión.
 
@@ -65,7 +77,7 @@ No hace falta backend, base de datos, cuenta, API ni servidor para almacenar dat
 - **Necesito ayuda ahora** solo prepara una frase y la reproduce por voz; no llama, no contacta a nadie y no sustituye un sistema de aviso urgente.
 - Si se guarda información sensible, otras personas con acceso al navegador/dispositivo podrían verla. Proteger el teléfono.
 
-## Contenido del ZIP
+## Archivos del proyecto
 
 `index.html` (interfaz), `app.js` (acciones y constructor), `manifest.webmanifest`, `sw.js` (caché), `assets/` (íconos) y `README.md`.
 
