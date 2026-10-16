@@ -3,13 +3,13 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#114756">
+  <meta name="theme-color" content="#2f4fa8">
   <meta name="description" content="Creá mensajes sin escribir mediante botones grandes, voz y WhatsApp.">
   <meta name="color-scheme" content="light">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Hablemos">
-  <title>Hablemos 1.5 · Conversaciones sin escribir</title>
+  <title>Hablemos 1.6 · Conversaciones sin escribir</title>
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./assets/icon-192.png" type="image/png">
   <style>
@@ -321,6 +321,44 @@
     body.contrast .tile{border:2px solid #1d2a33}
     body.contrast .tile svg.ico{color:#1d2a33}
     @media(prefers-reduced-motion:reduce){.tile{transition:none}}
+    /* ===== V1.6: gama de azules, fondo degradé azul → lila ===== */
+    :root{--primary:#2f4fa8;--ink:#1c2547;--muted:#55608a;--line:#d6dcf2}
+    html,body{min-height:100%}
+    body{background:linear-gradient(160deg,#c9dafe 0%,#d9dafa 45%,#e7d8f8 100%) fixed;color:var(--ink)}
+    .topbar .gear{border-color:#d3daf3;color:#2f4fa8;background:#ffffffd9}
+    .topbar .help{background:#ffffffe6}
+    .msg-strip{background:#ffffffeb;border-color:#cbd4f2;border-left-color:#2f4fa8;color:var(--ink)}
+    .msg-strip.empty{background:#ffffff99;border-color:#b9c3ea;color:#5a648c}
+    .tile{background:#ffffffeb;border-color:#d6dcf2;color:var(--ink);box-shadow:0 1px 2px #1c25470d,0 4px 12px #2f4fa812}
+    .tile:active{background:#eef1fd}
+    .tile svg.ico{color:#4a5a92}
+    .tile.cat-inicio,.tile.cat-acciones{border-left-color:#3d8f74}.tile.cat-inicio svg.ico,.tile.cat-acciones svg.ico{color:#3d8f74}
+    .tile.cat-detalles{border-left-color:#c07a3c}.tile.cat-detalles svg.ico{color:#c07a3c}
+    .tile.cat-personas{border-left-color:#b08a2a}.tile.cat-personas svg.ico{color:#9c7a1e}
+    .tile.cat-tiempo{border-left-color:#2f8fb5}.tile.cat-tiempo svg.ico{color:#2f8fb5}
+    .tile.cat-sentimientos{border-left-color:#3f62c9}.tile.cat-sentimientos svg.ico{color:#3f62c9}
+    .tile.cat-preguntas{border-left-color:#7a5cc9}.tile.cat-preguntas svg.ico{color:#7a5cc9}
+    .tile.cat-respuestas{border-left-color:#b0568a}.tile.cat-respuestas svg.ico{color:#b0568a}
+    .tile.learned{background:#f6f3ff}
+    .tile svg.mark{color:#7a5cc9}
+    .tile.folder{background:linear-gradient(145deg,#3a5cc0,#283f8f);border-color:#283f8f;color:#fff}
+    .tile.folder svg.ico{color:#d9e2ff}
+    .tile.back,.tile.nav{background:#e7ebfb;border-color:#cdd5f2;color:#2a3566}
+    .tile.back svg.ico,.tile.nav svg.ico{color:#4a5a92}
+    .tile.reply{border-left-color:#3f62c9}.tile.reply svg.ico{color:#3f62c9}
+    .tile.quote{background:#e6ebfd;border-color:#ccd5f5;border-left-color:#3a5cc0;color:#1f2d63}
+    .tile.quote svg.ico{color:#3a5cc0}
+    .tile.person{background:linear-gradient(145deg,#4766cc,#6a58c8);border-color:#5a5fca;color:#fff}
+    .act.erase{background:#ffffffe6;border-color:#cfd7f3;color:#2a3566}
+    .act.speak{background:linear-gradient(145deg,#3456b8,#24408e)}
+    .act.send{background:linear-gradient(145deg,#5a6fd6,#5b4fbf)}
+    .act.cancel{background:#fff;border-color:#cfd7f3;color:#2a3566}
+    .incoming{background:#ffffffeb;border-color:#ccd5f5;border-left-color:#3a5cc0}
+    .incoming-btn{background:#eef1fd;border-color:#ccd5f5;color:#1f2d63}
+    .join{background:#ffffffeb}
+    .bubble.out{background:#e3e8fc}
+    .bubble-say.audio{background:#3456b8;border-color:#3456b8}
+    dialog::backdrop{background:#1c254799}
   </style>
 </head>
 <body>
@@ -633,6 +671,6 @@
   </dialog>
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
   <script src="./icons.js?v=1.5" defer></script>
-  <script src="./app.js?v=1.5" defer></script>
+  <script src="./app.js?v=1.6" defer></script>
 </body>
 </html>

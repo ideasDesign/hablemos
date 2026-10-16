@@ -1,6 +1,12 @@
-# Hablemos V1.5 — Crear conversaciones sin escribir
+# Hablemos V1.6 — Crear conversaciones sin escribir
 
 **Prototipo accesible para Android**. Diseñado para una persona que comprende texto y puede pulsar botones grandes, pero no puede hablar y tiene dificultad para escribir.
+
+## Cambios de la versión 1.6: gama de azules
+
+- Toda la interfaz pasa a la **gama de los azules**: carpetas, Hablar y la barra del mensaje en azul, y Enviar en azul violáceo.
+- **Fondo en degradé del azul (arriba) al lila (abajo).**
+- Los colores por tipo de palabra se mantienen, en tonos que combinan con el azul. El rojo queda solo para «Necesito ayuda», para que se distinga.
 
 ## Cambios de la versión 1.5: diseño adulto con íconos de línea
 
@@ -242,8 +248,8 @@ Los datos (contactos, frases, palabras aprendidas) se guardan **solo en ese tel�
 
 ### Publicar una nueva versión
 
-1. Cambiar el nombre de la caché en `sw.js` (por ejemplo `hablemos-offline-v21` → `hablemos-offline-v22`), para actualizar la copia que se usa sin conexión.
-2. En `index.html`, cambiar la versión del script: `app.js?v=1.5` (y `icons.js?v=1.5`) → `app.js?v=1.5.1`. **Si no se cambia, el navegador puede seguir usando el `app.js` anterior hasta 10 minutos.**
+1. Cambiar el nombre de la caché en `sw.js` (por ejemplo `hablemos-offline-v22` → `hablemos-offline-v23`), para actualizar la copia que se usa sin conexión.
+2. En `index.html`, cambiar la versión del script: `app.js?v=1.6` → `app.js?v=1.6.1`. **Si no se cambia, el navegador puede seguir usando el `app.js` anterior hasta 10 minutos.**
 3. Guardar los cambios con git y subirlos: `git commit -am "…"` y `git push`.
 4. En uno o dos minutos GitHub Pages publica la nueva versión. Con internet, la próxima vez que se abra Hablemos ya carga la nueva.
 
