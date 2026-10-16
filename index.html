@@ -9,7 +9,7 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Hablemos">
-  <title>Hablemos 0.4 · Conversaciones sin escribir</title>
+  <title>Hablemos 0.4.1 · Conversaciones sin escribir</title>
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./assets/icon-192.png" type="image/png">
   <style>
@@ -159,6 +159,13 @@
     .tg-pending{margin-bottom:6px}
     .tg-linked-name{flex:1;border:2px solid var(--line);border-radius:14px;padding:14px;font-weight:800;background:#f4f9f8}
     .danger{color:#9b2e32;border-color:#efb8b8}
+    .conn-status{border-radius:12px;padding:9px 12px;margin:0 0 12px;font-size:.9rem;font-weight:750;line-height:1.4;background:#eef4f3;color:var(--ink)}
+    .conn-status[data-state=ok],.conn-status[data-state=other-tab]{background:#e7f5ec;color:#1b4d2f}
+    .conn-status[data-state=connecting],.conn-status[data-state=retrying]{background:#fff6dd;color:#5b4106}
+    .conn-status[data-state=conflict]{background:#ffeedd;color:#6b3a07}
+    .conn-status[data-state=invalid]{background:#fde8e8;color:#7d2125}
+    .tg-replace{border:2px solid var(--line);border-radius:14px;padding:10px 12px;margin:4px 0 6px}
+    .tg-replace summary{font-weight:800;color:var(--primary);min-height:40px;display:flex;align-items:center;cursor:pointer}
     .settings-group{margin:24px 0 2px;font-size:1.02rem;color:var(--primary);border-top:2px solid var(--line);padding-top:16px}
     .settings-group:first-child{margin-top:0;border-top:0;padding-top:0}
     select.forminput{appearance:auto}
@@ -229,6 +236,7 @@
     </section>
     <section id="chatCard" class="card" aria-labelledby="chatTitle" hidden>
       <div class="sectionhead"><h2 id="chatTitle">💬 Conversación</h2></div>
+      <p id="chatStatus" class="conn-status" role="status" hidden></p>
       <div id="chatThread" class="chat-thread"></div>
       <p class="minor-note">Los mensajes nuevos llegan mientras Hablemos está abierta. Si estuvo cerrada, aparecen al volver a abrirla.</p>
     </section>
@@ -420,7 +428,16 @@
         <button id="tgConnect" type="button" class="formbtn">Conectar el bot</button>
       </div>
       <div id="tgStepPeople" hidden>
-        <p class="tg-ok">✅ Conectado con <b id="tgBotName"></b></p>
+        <p class="tg-ok">✅ Bot: <b id="tgBotName"></b></p>
+        <p id="tgConnStatus" class="conn-status" role="status" hidden></p>
+        <details id="tgReplaceBox" class="tg-replace">
+          <summary>Cambiar el token del bot</summary>
+          <p class="formhint">Usalo si generaste un token nuevo con <b>/revoke</b> en @BotFather. Las personas conectadas y las conversaciones se mantienen.</p>
+          <label class="field" for="tgNewToken">Token nuevo</label>
+          <input id="tgNewToken" class="forminput" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="123456789:AAH4...">
+          <div id="tgReplaceError" class="error" role="alert" hidden></div>
+          <button id="tgReplace" type="button" class="formbtn">Guardar token nuevo</button>
+        </details>
         <h3 class="settings-group">3. Invitar a la familia</h3>
         <p class="formhint">Cada persona abre este enlace en su teléfono, con Telegram instalado, y toca <b>Iniciar</b>:</p>
         <p id="tgLink" class="tg-link"></p>
@@ -442,6 +459,6 @@
     </div>
   </dialog>
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
-  <script src="./app.js" defer></script>
+  <script src="./app.js?v=0.4.1" defer></script>
 </body>
 </html>

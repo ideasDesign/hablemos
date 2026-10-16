@@ -1,6 +1,14 @@
-# Hablemos V0.4 — Crear conversaciones sin escribir
+# Hablemos V0.4.1 — Crear conversaciones sin escribir
 
 **Prototipo accesible para Android**. Diseñado para una persona que comprende texto y puede pulsar botones grandes, pero no puede hablar y tiene dificultad para escribir.
+
+## Cambios de la versión 0.4.1: Telegram ya no se desconecta
+
+- **Corregido:** con Hablemos abierto en dos pestañas o ventanas, una podía borrar la conexión de Telegram (y otros datos) guardada por la otra. Ahora las pestañas se mantienen sincronizadas y solo una consulta a Telegram a la vez.
+- **Sigue recibiendo en segundo plano:** antes dejaba de recibir mensajes al cambiar de pestaña o minimizar la ventana.
+- **Estado de la conexión a la vista** en la conversación y en Configuración → Telegram: 🟢 conectado, 🟡 reconectando, ⚪ sin internet, 🟠 otro dispositivo usando el bot, 🔴 token que dejó de funcionar.
+- **Cambiar el token sin perder nada:** si se usa `/revoke` en @BotFather, en Configuración → Telegram → «Cambiar el token del bot» se pega el nuevo y se mantienen las personas conectadas y las conversaciones.
+- **Siempre la última versión:** con internet, la app carga primero la versión publicada (la copia guardada queda para usar sin conexión). Así no conviven una versión vieja y una nueva.
 
 ## Cambios de la versión 0.4: Telegram
 
@@ -22,7 +30,7 @@ Hablemos puede **enviar y recibir mensajes por Telegram sin salir de la app**, u
 ### Limitaciones a tener en cuenta
 
 - Los mensajes **llegan mientras Hablemos está abierta**. Si estuvo cerrada, aparecen al abrirla (Telegram los guarda hasta 24 horas). No hay notificaciones con la app cerrada.
-- Usar el bot **en un solo teléfono**. Si se abre Hablemos con el mismo bot en dos dispositivos, los mensajes se reparten entre ambos.
+- Usar el bot **en un solo teléfono o computadora**. Si se abre Hablemos con el mismo bot en dos dispositivos, los mensajes se reparten entre ambos (Hablemos lo avisa con 🟠). Varias pestañas en el mismo dispositivo sí funcionan bien.
 - Los mensajes llegan a la familia desde el bot, no desde una cuenta personal de Diego.
 - El token queda guardado solo en el teléfono. Quien lo tenga puede enviar mensajes como el bot: no compartirlo. Si se filtra, en @BotFather se puede generar uno nuevo con `/revoke`.
 - Los mensajes pasan por los servidores de Telegram. Borrar los datos del navegador borra el token y las conversaciones guardadas en Hablemos (no las de Telegram).
@@ -74,9 +82,10 @@ Los datos (contactos, frases, palabras aprendidas) se guardan **solo en ese tel�
 
 ### Publicar una nueva versión
 
-1. Cambiar el nombre de la caché en `sw.js` (por ejemplo `hablemos-offline-v3` → `hablemos-offline-v4`). **Si no se cambia, los teléfonos que ya la instalaron pueden seguir mostrando la versión anterior.**
-2. Guardar los cambios con git y subirlos: `git commit -am "…"` y `git push`.
-3. En uno o dos minutos GitHub Pages publica la nueva versión. En el teléfono, cerrar la app y volver a abrirla (a veces hace falta abrirla dos veces).
+1. Cambiar el nombre de la caché en `sw.js` (por ejemplo `hablemos-offline-v6` → `hablemos-offline-v7`), para actualizar la copia que se usa sin conexión.
+2. En `index.html`, cambiar la versión del script: `app.js?v=0.4.1` → `app.js?v=0.4.2`. **Si no se cambia, el navegador puede seguir usando el `app.js` anterior hasta 10 minutos.**
+3. Guardar los cambios con git y subirlos: `git commit -am "…"` y `git push`.
+4. En uno o dos minutos GitHub Pages publica la nueva versión. Con internet, la próxima vez que se abra Hablemos ya carga la nueva.
 
 ### Probar en la computadora
 
