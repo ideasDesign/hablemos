@@ -1,6 +1,31 @@
-# Hablemos V0.3.1 — Crear conversaciones sin escribir
+# Hablemos V0.4 — Crear conversaciones sin escribir
 
 **Prototipo accesible para Android**. Diseñado para una persona que comprende texto y puede pulsar botones grandes, pero no puede hablar y tiene dificultad para escribir.
+
+## Cambios de la versión 0.4: Telegram
+
+Hablemos puede **enviar y recibir mensajes por Telegram sin salir de la app**, usando un bot propio y la API oficial de Telegram. No hace falta servidor ni pago.
+
+- **Enviar:** con un contacto conectado, aparece el botón **✈ Telegram** junto a WhatsApp. Antes de enviar se muestra «¿Enviar a Mamá por Telegram?» con el mensaje, y se confirma con **Sí, enviar** (un doble toque rápido no envía; la confirmación se puede desactivar).
+- **Recibir:** las respuestas aparecen en un aviso arriba («📩 Mamá: …») con **Escuchar** y **Responder**, y se leen en voz alta automáticamente (se puede desactivar).
+- **Conversación:** debajo de «¿A quién se lo envío?» se ve el historial con esa persona, con botón 🔊 en cada mensaje recibido.
+- Audios, fotos y stickers se avisan con un texto («🎤 Envió un audio. Abrí Telegram para escucharlo»); todavía no se reproducen dentro de Hablemos.
+- **Seguridad:** solo se muestran y leen mensajes de personas aprobadas. Si escribe alguien desconocido, queda en espera para que quien acompaña lo apruebe o lo ignore.
+
+### Configurar Telegram (una sola vez, lo hace quien acompaña)
+
+1. **Crear el bot:** en Telegram, abrir **@BotFather** (oficial, con tilde azul), escribir `/newbot`, elegir un nombre (por ejemplo «Diego Hablemos») y un usuario terminado en `bot` (por ejemplo `diego_hablemos_bot`). BotFather responde con un **token**.
+2. **Conectar:** en Hablemos, **⚙ Configuración → ✈ Configurar Telegram**, pegar el token y tocar **Conectar el bot**.
+3. **Invitar:** compartir el enlace `t.me/…` que muestra Hablemos. Cada familiar lo abre con Telegram instalado y toca **Iniciar**.
+4. **Aprobar:** en Hablemos, tocar **Buscar personas que tocaron «Iniciar»** y **Conectar** a cada una (como contacto nuevo o unida a un contacto de WhatsApp existente). La persona recibe un mensaje de bienvenida.
+
+### Limitaciones a tener en cuenta
+
+- Los mensajes **llegan mientras Hablemos está abierta**. Si estuvo cerrada, aparecen al abrirla (Telegram los guarda hasta 24 horas). No hay notificaciones con la app cerrada.
+- Usar el bot **en un solo teléfono**. Si se abre Hablemos con el mismo bot en dos dispositivos, los mensajes se reparten entre ambos.
+- Los mensajes llegan a la familia desde el bot, no desde una cuenta personal de Diego.
+- El token queda guardado solo en el teléfono. Quien lo tenga puede enviar mensajes como el bot: no compartirlo. Si se filtra, en @BotFather se puede generar uno nuevo con `/revoke`.
+- Los mensajes pasan por los servidores de Telegram. Borrar los datos del navegador borra el token y las conversaciones guardadas en Hablemos (no las de Telegram).
 
 ## Cambios de la versión 0.3.1
 
@@ -76,6 +101,7 @@ No hace falta backend, base de datos, cuenta, API ni servidor para almacenar dat
 
 - El texto, los contactos y los mensajes guardados se almacenan en `localStorage` del navegador **en el dispositivo**. No se sincronizan, respaldan ni envían a un servidor propio.
 - Al abrir WhatsApp, el número y texto seleccionados pasan a WhatsApp mediante un enlace `wa.me`.
+- Con Telegram, los mensajes enviados y recibidos pasan por los servidores de Telegram mediante el bot propio; Hablemos guarda una copia de las conversaciones solo en el teléfono.
 - **No recibe, consulta ni lee los mensajes de WhatsApp. No envía mensajes automáticamente.**
 - El área **Guardadas** contiene frases guardadas localmente, **no** un historial real de conversaciones de WhatsApp.
 - Borrar los datos del navegador o cambiar de dispositivo puede eliminar contactos, frases y preferencias. No usar como único método de comunicación o atención de emergencias.

@@ -9,7 +9,7 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Hablemos">
-  <title>Hablemos 0.3.1 · Conversaciones sin escribir</title>
+  <title>Hablemos 0.4 · Conversaciones sin escribir</title>
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./assets/icon-192.png" type="image/png">
   <style>
@@ -130,6 +130,35 @@
     .voice-help{background:#fff3de;border:2px solid #d49737;border-radius:14px;padding:12px 14px;margin:12px 0 4px;color:#4a3207;font-size:.9rem;line-height:1.5}
     .voice-help ol{margin:8px 0;padding-left:20px}
     .voice-help li{margin:4px 0}
+    /* V0.4: Telegram */
+    .telegram{background:#1f78b8;color:#fff}
+    .cancel{background:#eef2f2;color:var(--ink);border:2px solid var(--line)}
+    .sendgrid.has-tg .speak{grid-column:1/-1}
+    .incoming{background:#e6f2fb;border:2px solid #1f78b8;border-radius:16px;padding:12px 14px;margin:0 0 12px;color:#0f3550}
+    .incoming p{margin:0 0 10px;font-size:1.05rem;line-height:1.4;overflow-wrap:anywhere}
+    .incoming-actions{display:grid;grid-template-columns:1fr 1fr 56px;gap:8px}
+    .incoming-btn{min-height:54px;display:flex;align-items:center;justify-content:center;gap:6px;white-space:nowrap;padding:6px;border-radius:12px;border:2px solid #1f78b8;background:#fff;color:#0f3550;font-weight:800}
+    .chat-thread{display:flex;flex-direction:column;gap:9px;max-height:360px;overflow-y:auto;padding:2px}
+    .bubble{max-width:88%;border-radius:16px;padding:10px 12px;line-height:1.4;overflow-wrap:anywhere}
+    .bubble p{margin:4px 0 0;font-size:1.04rem}
+    .bubble small{color:var(--muted);font-size:.78rem;font-weight:700}
+    .bubble.in{align-self:flex-start;background:#eef4f3;border:2px solid var(--line)}
+    .bubble.out{align-self:flex-end;background:#dcebf7;border:2px solid #a9cbe6}
+    .bubble-say{margin-top:8px;min-height:46px;border-radius:11px;border:2px solid #9bb9b7;background:#fff;color:var(--primary);font-weight:800;padding:6px 12px}
+    .send-body{padding:22px 20px}
+    .send-body h2{font-size:1.25rem;margin-bottom:12px}
+    .send-preview{background:#f2f6f6;border-radius:14px;padding:14px;font-size:1.12rem;line-height:1.45;font-weight:700;overflow-wrap:anywhere}
+    .send-body .action{min-height:80px}
+    .steps{padding-left:22px;line-height:1.55}
+    .steps li{margin:5px 0}
+    .tg-ok{background:#e7f5ec;border:2px solid #8cc5a1;border-radius:13px;padding:11px 13px;font-weight:700}
+    .tg-link{background:#f2f6f6;border-radius:12px;padding:12px;font-weight:800;overflow-wrap:anywhere;user-select:all}
+    .tg-person{border:2px solid var(--line);border-radius:14px;padding:12px;margin-top:12px}
+    .tg-person .formbtn{margin-top:0}
+    .tg-person .actiongrid{margin-top:12px}
+    .tg-pending{margin-bottom:6px}
+    .tg-linked-name{flex:1;border:2px solid var(--line);border-radius:14px;padding:14px;font-weight:800;background:#f4f9f8}
+    .danger{color:#9b2e32;border-color:#efb8b8}
     .settings-group{margin:24px 0 2px;font-size:1.02rem;color:var(--primary);border-top:2px solid var(--line);padding-top:16px}
     .settings-group:first-child{margin-top:0;border-top:0;padding-top:0}
     select.forminput{appearance:auto}
@@ -167,6 +196,14 @@
   <main class="wrap">
     <div id="offline" class="offline" role="status" hidden>Sin conexión a internet. Podés seguir preparando frases; WhatsApp necesita conexión.</div>
     <div class="help-row"><button id="helpBtn" class="help" type="button">🆘 Necesito ayuda ahora</button></div>
+    <div id="incoming" class="incoming" role="status" aria-live="polite" hidden>
+      <p><strong id="incomingName"></strong> <span id="incomingText"></span></p>
+      <div class="incoming-actions">
+        <button id="incomingSay" type="button" class="incoming-btn">🔊 Escuchar</button>
+        <button id="incomingReply" type="button" class="incoming-btn">💬 Responder</button>
+        <button id="incomingClose" type="button" class="incoming-btn close" aria-label="Cerrar aviso">✕</button>
+      </div>
+    </div>
     <section class="card" aria-labelledby="msg-title">
       <div class="sectionhead"><h2 id="msg-title">Mi mensaje</h2></div>
       <textarea id="message" class="message" maxlength="1000" placeholder="Tocá las palabras de abajo para preparar tu mensaje." aria-label="Mensaje para decir o enviar"></textarea>
@@ -174,12 +211,13 @@
         <label class="checkline"><input id="combine" type="checkbox"> Combinar frases</label>
         <button class="clear" id="clearBtn" type="button">✕ Borrar todo</button>
       </div>
-      <div class="actiongrid">
+      <div class="actiongrid sendgrid">
         <button id="speakBtn" class="action speak" type="button">🔊 Hablar</button>
         <button id="whatsBtn" class="action whatsapp" type="button">↗ WhatsApp</button>
+        <button id="tgBtn" class="action telegram" type="button" hidden>✈ Telegram</button>
       </div>
       <button id="saveBtn" type="button" class="save-draft">☆ Guardar esta frase para otra ocasión</button>
-      <p class="minor-note">WhatsApp abrirá el mensaje preparado. El envío se confirma dentro de WhatsApp.</p>
+      <p class="minor-note">WhatsApp abrirá el mensaje preparado y el envío se confirma dentro de WhatsApp. Telegram envía sin salir de Hablemos.</p>
     </section>
     <section class="card" aria-labelledby="contact-title">
       <div class="sectionhead"><h2 id="contact-title">¿A quién se lo envío?</h2></div>
@@ -188,6 +226,11 @@
         <span class="contacttext"><strong id="contactName">Elegir contacto</strong><small id="contactHint">Agregá un contacto de confianza</small></span>
         <strong aria-hidden="true">›</strong>
       </button>
+    </section>
+    <section id="chatCard" class="card" aria-labelledby="chatTitle" hidden>
+      <div class="sectionhead"><h2 id="chatTitle">💬 Conversación</h2></div>
+      <div id="chatThread" class="chat-thread"></div>
+      <p class="minor-note">Los mensajes nuevos llegan mientras Hablemos está abierta. Si estuvo cerrada, aparecen al volver a abrirla.</p>
     </section>
     <nav class="modebar" aria-label="Modo de comunicación">
       <button id="tabBuild" class="mode" type="button" aria-current="page">🧩 Crear mensaje</button>
@@ -216,9 +259,10 @@
         <button type="button" data-punctuation="!" class="punct">! Emoción</button>
       </div>
       <button id="ownBlockBtn" class="create-block" type="button">＋ Agregar una palabra o bloque personalizado</button>
-      <div class="actiongrid builder-actions">
+      <div class="actiongrid builder-actions sendgrid">
         <button id="builderSpeakBtn" class="action speak" type="button">🔊 Hablar</button>
         <button id="builderWhatsBtn" class="action whatsapp" type="button">↗ WhatsApp</button>
+        <button id="builderTgBtn" class="action telegram" type="button" hidden>✈ Telegram</button>
       </div>
     </section>
     <section id="quickPanel" aria-labelledby="phrase-title" hidden>
@@ -316,6 +360,10 @@
       <p class="formhint">La app aprende el orden de las palabras de los mensajes que se hablan, envían o guardan. Todo queda en este dispositivo.</p>
       <button id="forgetLearned" type="button" class="clear wide">Olvidar lo aprendido</button>
 
+      <h3 class="settings-group">Telegram</h3>
+      <p id="tgStatus" class="formhint"></p>
+      <button id="tgOpen" type="button" class="clear wide">✈ Configurar Telegram</button>
+
       <h3 class="settings-group">Protección de toques</h3>
       <label class="field" for="holdSelect">Mantener presionado para elegir</label>
       <select id="holdSelect" class="forminput">
@@ -338,6 +386,59 @@
       <div class="sample">🔊 La voz usa la síntesis de voz disponible en tu Android. Podés seguir usando las frases aunque no haya internet; la reproducción por voz dependerá del motor de voz instalado.</div>
       <p class="formhint">Para instalar: abrí esta aplicación desde una dirección HTTPS en Chrome para Android y elegí “Instalar aplicación” o “Agregar a pantalla principal” desde el menú.</p>
       <button type="button" class="formbtn" data-close="settingsDialog">Listo</button>
+    </div>
+  </dialog>
+  <dialog id="sendDialog" data-board aria-labelledby="sendTo">
+    <div class="modalbody send-body">
+      <h2 id="sendTo">¿Enviar por Telegram?</h2>
+      <p id="sendPreview" class="send-preview"></p>
+      <div class="actiongrid">
+        <button id="sendNo" type="button" class="action cancel">✕ No, volver</button>
+        <button id="sendYes" type="button" class="action telegram">✈ Sí, enviar</button>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog id="tgDialog" aria-labelledby="tgTitle">
+    <div class="modalhead"><h2 id="tgTitle">✈ Telegram</h2><button type="button" class="modalclose" data-close="tgDialog" aria-label="Cerrar">✕</button></div>
+    <div class="modalbody">
+      <div id="tgStepToken">
+        <p class="muted">Con un bot propio de Telegram, Hablemos envía y recibe mensajes sin salir de la app. Esta configuración la hace una sola vez quien acompaña.</p>
+        <h3 class="settings-group">1. Crear el bot</h3>
+        <ol class="steps">
+          <li>En Telegram, abrir <a href="https://t.me/BotFather" target="_blank" rel="noopener">@BotFather</a> (el bot oficial de Telegram, con tilde azul).</li>
+          <li>Escribirle <b>/newbot</b>.</li>
+          <li>Elegir un nombre visible, por ejemplo <b>Diego Hablemos</b>.</li>
+          <li>Elegir un usuario que termine en <b>bot</b>, por ejemplo <b>diego_hablemos_bot</b>.</li>
+          <li>BotFather responde con un <b>token</b>, parecido a <code>123456789:AAH4…</code>. Copiarlo.</li>
+        </ol>
+        <h3 class="settings-group">2. Pegar el token</h3>
+        <label class="field" for="tgToken">Token del bot</label>
+        <input id="tgToken" class="forminput" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="123456789:AAH4...">
+        <p class="formhint">El token queda guardado solo en este teléfono. Quien lo tenga puede enviar mensajes como el bot: no lo compartas.</p>
+        <div id="tgError" class="error" role="alert" hidden></div>
+        <button id="tgConnect" type="button" class="formbtn">Conectar el bot</button>
+      </div>
+      <div id="tgStepPeople" hidden>
+        <p class="tg-ok">✅ Conectado con <b id="tgBotName"></b></p>
+        <h3 class="settings-group">3. Invitar a la familia</h3>
+        <p class="formhint">Cada persona abre este enlace en su teléfono, con Telegram instalado, y toca <b>Iniciar</b>:</p>
+        <p id="tgLink" class="tg-link"></p>
+        <div class="actiongrid">
+          <button id="tgShareLink" type="button" class="clear">Compartir enlace</button>
+          <button id="tgCopyLink" type="button" class="clear">Copiar enlace</button>
+        </div>
+        <h3 class="settings-group">4. Conectar a cada persona</h3>
+        <button id="tgRefresh" type="button" class="formbtn">🔄 Buscar personas que tocaron «Iniciar»</button>
+        <div id="tgPending" class="tg-pending"></div>
+        <h3 class="settings-group">Personas conectadas</h3>
+        <div id="tgLinked" class="contactlist"></div>
+        <h3 class="settings-group">Opciones</h3>
+        <div class="settingrow"><label for="tgAutoRead">Leer en voz alta los mensajes que llegan</label><input id="tgAutoRead" type="checkbox"></div>
+        <div class="settingrow"><label for="tgConfirm">Pedir confirmación antes de enviar</label><input id="tgConfirm" type="checkbox"></div>
+        <p class="formhint">Solo se muestran y leen mensajes de personas conectadas. Si escribe alguien desconocido, aparece en el paso 4 para aprobarlo o ignorarlo.</p>
+        <button id="tgDisconnect" type="button" class="clear wide danger">Desconectar Telegram</button>
+      </div>
     </div>
   </dialog>
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>

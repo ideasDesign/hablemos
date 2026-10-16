@@ -103,7 +103,10 @@
     tokens:[],punctuation:'.',buildCategory:'inicio',savedMessages:[],customBlocks:[],mode:'build',
     suggest:true,learned:{},voiceURI:'',rate:.9,pitch:1,volume:1,holdMs:0,repeatMs:0};
   const clampNumber=(value,min,max,fallback)=>typeof value==='number'&&isFinite(value)?Math.min(max,Math.max(min,value)):fallback;
-  let state = {...initial};
+  // V0.4: Telegram. threads = {chatId: [{dir:'in'|'out', text, date}]}; pending = personas que tocaron «Iniciar» y aún no están vinculadas.
+  const tgInitial=()=>({token:'',bot:null,offset:0,autoRead:true,confirm:true,pending:[],threads:{}});
+  const chatIdOk=v=>typeof v==='string'&&/^-?\d{1,20}$/.test(v);
+  let state = {...initial,learned:{},tg:tgInitial()};
   function loadStored(key) {
     try {
       const value = JSON.parse(localStorage.getItem(key));
@@ -112,7 +115,23 @@
   }
   const stored = loadStored('hablemos.v3') || loadStored('hablemos.v2') || loadStored('hablemos.v1');
   if(stored) {
-    if(Array.isArray(stored.contacts)) state.contacts=stored.contacts.filter(x=>x&&typeof x.name==='string'&&typeof x.phone==='string'&&typeof x.id==='string').slice(0,50).map(x=>({id:x.id,name:x.name.slice(0,36),phone:x.phone.replace(/\D/g,'')}));
+    if(Array.isArray(stored.contacts)) state.contacts=stored.contacts.filter(x=>x&&typeof x.name==='string'&&typeof x.phone==='string'&&typeof x.id==='string').slice(0,50).map(x=>({id:x.id,name:x.name.slice(0,36),phone:x.phone.replace(/\D/g,''),...(chatIdOk(x.telegramId)?{telegramId:x.telegramId}:{})}));
+    const tg=stored.tg;
+    if(tg&&typeof tg==='object'&&!Array.isArray(tg)&&typeof tg.token==='string'&&/^\d{3,15}:[\w-]{20,80}$/.test(tg.token)){
+      const clean=tgInitial();clean.token=tg.token;
+      if(tg.bot&&typeof tg.bot.username==='string')clean.bot={username:tg.bot.username.slice(0,64),name:String(tg.bot.name||tg.bot.username).slice(0,64)};
+      if(Number.isInteger(tg.offset)&&tg.offset>=0)clean.offset=tg.offset;
+      if(typeof tg.autoRead==='boolean')clean.autoRead=tg.autoRead;
+      if(typeof tg.confirm==='boolean')clean.confirm=tg.confirm;
+      if(Array.isArray(tg.pending))clean.pending=tg.pending.filter(p=>p&&chatIdOk(p.chatId)&&typeof p.name==='string').slice(0,20).map(p=>({chatId:p.chatId,name:p.name.slice(0,64),username:typeof p.username==='string'?p.username.slice(0,64):''}));
+      if(tg.threads&&typeof tg.threads==='object'){
+        for(const [chatId,list] of Object.entries(tg.threads).slice(0,30)){
+          if(!chatIdOk(chatId)||!Array.isArray(list))continue;
+          clean.threads[chatId]=list.filter(m=>m&&(m.dir==='in'||m.dir==='out')&&typeof m.text==='string'&&Number.isFinite(m.date)).slice(-100).map(m=>({dir:m.dir,text:m.text.slice(0,4096),date:m.date}));
+        }
+      }
+      state.tg=clean;
+    }
     if(Array.isArray(stored.ownPhrases)) state.ownPhrases=stored.ownPhrases.filter(x=>typeof x==='string'&&x.length<=200).slice(0,100);
     if(typeof stored.message==='string')state.message=stored.message.slice(0,1000);
     if(typeof stored.selectedContactId==='string')state.selectedContactId=stored.selectedContactId;
@@ -314,6 +333,7 @@
     const c=selected();$('contactName').textContent=c?c.name:'Elegir contacto';
     $('contactHint').textContent=c?'Tocar para cambiar':'Agregá un contacto de confianza';
     $('contactAvatar').textContent=c?c.name.trim().charAt(0).toLocaleUpperCase('es'):'+';
+    renderChat();
   }
   function renderContactList(){
     const root=$('contactsList');root.replaceChildren();
@@ -322,10 +342,10 @@
       const row=document.createElement('div');row.className='contactline';
       const b=document.createElement('button');b.type='button';b.className='pick';
       const title=document.createElement('strong');title.textContent=(state.selectedContactId===c.id?'✓ ':'')+c.name;
-      const sub=document.createElement('small');sub.textContent='+'+c.phone;b.append(title,sub);
+      const sub=document.createElement('small');sub.textContent=[c.phone?'+'+c.phone:'',c.telegramId?'✈ Telegram':''].filter(Boolean).join(' · ');b.append(title,sub);
       b.addEventListener('click',()=>{state.selectedContactId=c.id;persist();renderSelectedContact();$('contactsDialog').close();notify('Contacto elegido: '+c.name);});
       const del=document.createElement('button');del.type='button';del.className='delete';del.textContent='✕';del.setAttribute('aria-label','Eliminar '+c.name);
-      del.addEventListener('click',()=>{if(!window.confirm('¿Eliminar a '+c.name+' de tus contactos?'))return;state.contacts=state.contacts.filter(x=>x.id!==c.id);if(state.selectedContactId===c.id)state.selectedContactId=null;persist();renderContactList();renderSelectedContact();});
+      del.addEventListener('click',()=>{if(!window.confirm('¿Eliminar a '+c.name+' de tus contactos?'))return;state.contacts=state.contacts.filter(x=>x.id!==c.id);if(c.telegramId)delete state.tg.threads[c.telegramId];if(state.selectedContactId===c.id)state.selectedContactId=null;persist();renderContactList();renderSelectedContact();});
       row.append(b,del);root.append(row);
     }
   }
@@ -377,9 +397,237 @@
   function sendWhatsApp(){
     const msg=state.message.trim();if(!msg){notify('Primero prepará un mensaje.');return;}
     const c=selected();if(!c){renderContactList();$('contactsDialog').showModal();notify('Elegí o agregá un contacto.');return;}
+    if(!c.phone){notify(c.name+' no tiene número de WhatsApp. Podés usar Telegram.');return;}
     const num=c.phone.replace(/\D/g,'');if(!/^\d{8,15}$/.test(num)){notify('Revisá el número internacional.');return;}
     learnFromMessage();
     window.location.href='https://wa.me/'+num+'?text='+encodeURIComponent(msg);
+  }
+  // ===== V0.4: Telegram con un bot propio =====
+  // Todo se hace desde el teléfono contra la API oficial de Telegram, sin servidor propio.
+  // Se usan pedidos POST con formulario (sin cabeceras extra) para que el navegador no exija preflight CORS.
+  const TG_API='https://api.telegram.org/bot';
+  const tgReady=()=>!!state.tg.token;
+  const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+  async function tgCall(method,params={},signal,token=state.tg.token){
+    const body=new URLSearchParams();
+    for(const [k,v] of Object.entries(params))body.append(k,typeof v==='object'?JSON.stringify(v):String(v));
+    const res=await fetch(TG_API+token+'/'+method,{method:'POST',body,signal,cache:'no-store'});
+    let data=null;try{data=await res.json();}catch(e){}
+    if(!data||!data.ok){const err=new Error(data&&data.description||'Error de Telegram');err.code=data&&data.error_code||res.status;throw err;}
+    return data.result;
+  }
+  function tgError(e,who){
+    if(e.code===401)return 'El token de Telegram no es válido. Revisalo en Configuración → Telegram.';
+    if(e.code===403)return (who||'Esta persona')+' bloqueó o eliminó el bot. Tiene que volver a tocar «Iniciar».';
+    if(e.code===400&&/chat not found/i.test(e.message))return 'No se encontró el chat de '+(who||'esta persona')+'. Tiene que tocar «Iniciar» en el bot.';
+    if(e.code===429)return 'Telegram pide esperar un momento antes de volver a enviar.';
+    return 'No se pudo conectar con Telegram. Revisá la conexión e intentá de nuevo.';
+  }
+  function pushThread(chatId,dir,text,date){
+    const list=state.tg.threads[chatId]||(state.tg.threads[chatId]=[]);
+    list.push({dir,text:text.slice(0,4096),date});
+    if(list.length>100)list.splice(0,list.length-100);
+    const ids=Object.keys(state.tg.threads);
+    if(ids.length>30){const oldest=ids.sort((a,b)=>(state.tg.threads[a].at(-1)?.date||0)-(state.tg.threads[b].at(-1)?.date||0))[0];delete state.tg.threads[oldest];}
+  }
+  function describeIncoming(m){
+    if(typeof m.text==='string')return m.text;
+    const caption=typeof m.caption==='string'?': '+m.caption:'';
+    if(m.voice||m.audio)return '🎤 Envió un audio. Abrí Telegram para escucharlo.';
+    if(m.photo)return '🖼️ Envió una foto'+caption;
+    if(m.video||m.video_note)return '🎬 Envió un video'+caption;
+    if(m.sticker)return (m.sticker.emoji||'🙂')+' (sticker)';
+    if(m.document)return '📎 Envió un archivo'+caption;
+    if(m.location)return '📍 Envió una ubicación.';
+    if(m.contact)return '👤 Envió un contacto.';
+    return '💬 Envió un mensaje que Hablemos no puede mostrar. Abrí Telegram para verlo.';
+  }
+  const contactByChat=chatId=>state.contacts.find(c=>c.telegramId===chatId)||null;
+  function handleUpdates(updates){
+    let changed=false;
+    for(const u of updates){
+      state.tg.offset=Math.max(state.tg.offset,u.update_id+1);changed=true;
+      const m=u.message;
+      if(!m||!m.chat||m.chat.type!=='private'||!m.from||m.from.is_bot)continue;
+      const chatId=String(m.chat.id);
+      const name=[m.from.first_name,m.from.last_name].filter(Boolean).join(' ').trim().slice(0,64)||m.from.username||'Sin nombre';
+      const contact=contactByChat(chatId);
+      const text=describeIncoming(m);
+      if(!contact){
+        // Alguien que todavía no está vinculado: queda pendiente para que quien acompaña lo apruebe. No se lee en voz alta.
+        if(!state.tg.pending.some(p=>p.chatId===chatId)){
+          state.tg.pending.push({chatId,name,username:m.from.username||''});
+          if(state.tg.pending.length>20)state.tg.pending.shift();
+        }
+        continue;
+      }
+      if(/^\/start\b/.test(text))continue;
+      pushThread(chatId,'in',text,(m.date||Date.now()/1000)*1000);
+      showIncoming(contact,text);
+    }
+    if(changed){persist();renderChat();if($('tgDialog').open)renderTgDialog();}
+  }
+  let pollCtrl=null,polling=false,quickPoll=false,reportPending=false;
+  async function pollLoop(){
+    if(polling)return;polling=true;
+    const token=state.tg.token;
+    while(state.tg.token===token&&tgReady()&&document.visibilityState==='visible'&&navigator.onLine){
+      const ctrl=pollCtrl=new AbortController();
+      const timeout=quickPoll?0:25;quickPoll=false;
+      try{
+        const updates=await tgCall('getUpdates',{offset:state.tg.offset,timeout,allowed_updates:['message']},ctrl.signal,token);
+        handleUpdates(updates);
+        if(reportPending){reportPending=false;if(!state.tg.pending.length)notify('Todavía no hay personas nuevas. Pediles que abran el enlace y toquen «Iniciar».');}
+      }catch(e){
+        if(ctrl.signal.aborted){if(ctrl.signal.reason==='kick')continue;break;}
+        if(e.code===401){notify(tgError(e));break;}
+        await sleep(e.code===409?15000:8000);
+      }
+    }
+    polling=false;pollCtrl=null;
+  }
+  function startPolling(){if(tgReady())pollLoop();}
+  function kickPolling(){quickPoll=true;if(pollCtrl&&polling)pollCtrl.abort('kick');else pollLoop();}
+  function stopPolling(){if(pollCtrl)pollCtrl.abort('stop');}
+  let incomingContactId=null;
+  function showIncoming(contact,text){
+    incomingContactId=contact.id;
+    $('incomingName').textContent='📩 '+contact.name+':';$('incomingText').textContent=text;$('incoming').hidden=false;
+    if(state.tg.autoRead)talk(contact.name+' dice: '+text);
+  }
+  function formatTime(ms){
+    const d=new Date(ms),today=new Date();
+    const time=d.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
+    return d.toDateString()===today.toDateString()?time:d.toLocaleDateString('es-AR',{day:'numeric',month:'short'})+' '+time;
+  }
+  function renderChat(){
+    const c=selected();
+    const show=tgReady()&&!!c&&!!c.telegramId;
+    $('chatCard').hidden=!show;
+    for(const id of ['tgBtn','builderTgBtn'])$(id).hidden=!tgReady();
+    document.querySelectorAll('.actiongrid.sendgrid').forEach(g=>g.classList.toggle('has-tg',tgReady()));
+    if(!show)return;
+    $('chatTitle').textContent='💬 Conversación con '+c.name;
+    const root=$('chatThread');root.replaceChildren();
+    const list=(state.tg.threads[c.telegramId]||[]).slice(-30);
+    if(!list.length){const p=document.createElement('p');p.className='muted';p.textContent='Todavía no hay mensajes. Lo que se envíe o reciba por Telegram va a aparecer acá.';root.append(p);return;}
+    for(const m of list){
+      const row=document.createElement('div');row.className='bubble '+m.dir;
+      const who=document.createElement('small');who.textContent=(m.dir==='in'?c.name:'Yo')+' · '+formatTime(m.date);
+      const text=document.createElement('p');text.textContent=m.text;
+      row.append(who,text);
+      if(m.dir==='in'){
+        const say=document.createElement('button');say.type='button';say.className='bubble-say';say.textContent='🔊 Escuchar';
+        say.setAttribute('aria-label','Escuchar mensaje de '+c.name);say.addEventListener('click',()=>talk(m.text));row.append(say);
+      }
+      root.append(row);
+    }
+    root.scrollTop=root.scrollHeight;
+  }
+  function sendTelegram(){
+    const msg=state.message.trim();if(!msg){notify('Primero prepará un mensaje.');return;}
+    const c=selected();if(!c){renderContactList();$('contactsDialog').showModal();notify('Elegí o agregá un contacto.');return;}
+    if(!c.telegramId){notify(c.name+' no está conectado a Telegram. Se conecta en Configuración → Telegram.');return;}
+    if(!navigator.onLine){notify('Sin conexión: Telegram necesita internet.');return;}
+    if(!state.tg.confirm){doSendTelegram();return;}
+    $('sendTo').textContent='¿Enviar a '+c.name+' por Telegram?';$('sendPreview').textContent=msg;
+    sendOpenedAt=Date.now();$('sendDialog').showModal();
+  }
+  let sendOpenedAt=0,sending=false;
+  async function doSendTelegram(){
+    const c=selected();const msg=state.message.trim();
+    if(sending||!c||!c.telegramId||!msg)return;
+    sending=true;notify('Enviando a '+c.name+'…');
+    try{
+      await tgCall('sendMessage',{chat_id:c.telegramId,text:msg});
+      learnFromMessage();
+      pushThread(c.telegramId,'out',msg,Date.now());persist();renderChat();
+      notify('✓ Enviado a '+c.name);
+    }catch(e){notify(tgError(e,c.name));}
+    finally{sending=false;}
+  }
+  // --- Configuración y vinculación ---
+  const botLink=()=>state.tg.bot?'https://t.me/'+state.tg.bot.username:'';
+  function renderTgStatus(){
+    $('tgStatus').textContent=tgReady()?'Conectado con @'+(state.tg.bot?state.tg.bot.username:'bot')+' · '+state.contacts.filter(c=>c.telegramId).length+' persona(s) conectada(s)':'Sin configurar. Permite enviar y recibir mensajes sin salir de Hablemos.';
+  }
+  function renderTgDialog(){
+    const ready=tgReady();
+    $('tgStepToken').hidden=ready;$('tgStepPeople').hidden=!ready;
+    renderTgStatus();
+    if(!ready)return;
+    $('tgBotName').textContent=state.tg.bot?state.tg.bot.name+' (@'+state.tg.bot.username+')':'tu bot';
+    $('tgLink').textContent=botLink();
+    $('tgAutoRead').checked=state.tg.autoRead;$('tgConfirm').checked=state.tg.confirm;
+    const pend=$('tgPending');pend.replaceChildren();
+    if(!state.tg.pending.length){const p=document.createElement('p');p.className='muted';p.textContent='No hay personas esperando. Cuando alguien toque «Iniciar», tocá «Buscar personas».';pend.append(p);}
+    for(const p of state.tg.pending){
+      const box=document.createElement('div');box.className='tg-person';
+      const title=document.createElement('strong');title.textContent=p.name+(p.username?' (@'+p.username+')':'');
+      const label=document.createElement('label');label.className='field';label.textContent='Guardar como';
+      const select=document.createElement('select');select.className='forminput';
+      const fresh=document.createElement('option');fresh.value='';fresh.textContent='Contacto nuevo: '+p.name;select.append(fresh);
+      for(const c of state.contacts.filter(c=>!c.telegramId)){const o=document.createElement('option');o.value=c.id;o.textContent='Mi contacto: '+c.name;select.append(o);}
+      const id='tgsel-'+p.chatId;select.id=id;label.htmlFor=id;
+      const actions=document.createElement('div');actions.className='actiongrid';
+      const ok=document.createElement('button');ok.type='button';ok.className='formbtn';ok.textContent='✓ Conectar';
+      ok.addEventListener('click',()=>linkPerson(p,select.value));
+      const no=document.createElement('button');no.type='button';no.className='clear';no.textContent='Ignorar';
+      no.addEventListener('click',()=>{state.tg.pending=state.tg.pending.filter(x=>x.chatId!==p.chatId);persist();renderTgDialog();});
+      actions.append(ok,no);box.append(title,label,select,actions);pend.append(box);
+    }
+    const linked=$('tgLinked');linked.replaceChildren();
+    const people=state.contacts.filter(c=>c.telegramId);
+    if(!people.length){const p=document.createElement('p');p.className='muted';p.textContent='Todavía no hay nadie conectado.';linked.append(p);}
+    for(const c of people){
+      const row=document.createElement('div');row.className='contactline';
+      const name=document.createElement('div');name.className='tg-linked-name';name.textContent='✈ '+c.name;
+      const del=document.createElement('button');del.type='button';del.className='delete';del.textContent='Quitar';del.setAttribute('aria-label','Desconectar a '+c.name+' de Telegram');
+      del.addEventListener('click',()=>{
+        if(!window.confirm('¿Desconectar a '+c.name+' de Telegram? El contacto se mantiene.'))return;
+        delete state.tg.threads[c.telegramId];delete c.telegramId;
+        if(!c.phone)state.contacts=state.contacts.filter(x=>x.id!==c.id);
+        if(!selected())state.selectedContactId=null;
+        persist();renderTgDialog();renderSelectedContact();
+      });
+      row.append(name,del);linked.append(row);
+    }
+  }
+  async function linkPerson(p,contactId){
+    let c=contactId?state.contacts.find(x=>x.id===contactId):null;
+    if(!c){
+      if(state.contacts.length>=50){notify('Se alcanzó el máximo de contactos.');return;}
+      c={id:Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,8),name:p.name.slice(0,36),phone:''};
+      state.contacts.push(c);
+    }
+    c.telegramId=p.chatId;
+    state.tg.pending=state.tg.pending.filter(x=>x.chatId!==p.chatId);
+    if(!state.selectedContactId)state.selectedContactId=c.id;
+    persist();renderTgDialog();renderSelectedContact();notify(c.name+' quedó conectado por Telegram');
+    try{await tgCall('sendMessage',{chat_id:p.chatId,text:'✅ ¡Listo! Ya estás conectado/a. Los mensajes de Hablemos te van a llegar por este chat, y podés responder escribiendo acá.'});}catch(e){}
+  }
+  async function connectTelegram(){
+    const token=$('tgToken').value.trim().replace(/\s+/g,'');
+    const error=$('tgError');error.hidden=true;
+    if(!/^\d{3,15}:[\w-]{20,80}$/.test(token)){error.textContent='El token no tiene el formato correcto. Es parecido a 123456789:AAH4… y lo da @BotFather.';error.hidden=false;return;}
+    if(!navigator.onLine){error.textContent='Se necesita internet para conectar el bot.';error.hidden=false;return;}
+    $('tgConnect').disabled=true;
+    try{
+      const me=await tgCall('getMe',{},undefined,token);
+      if(!me.is_bot)throw Object.assign(new Error('not a bot'),{code:401});
+      state.tg={...tgInitial(),token,bot:{username:me.username,name:me.first_name||me.username}};
+      $('tgToken').value='';persist();renderTgDialog();renderChat();startPolling();
+      notify('Bot conectado: @'+me.username);
+    }catch(e){error.textContent=e.code===401||e.code===404?'Telegram no reconoce ese token. Copialo de nuevo desde @BotFather.':tgError(e);error.hidden=false;}
+    finally{$('tgConnect').disabled=false;}
+  }
+  function disconnectTelegram(){
+    if(!window.confirm('¿Desconectar Telegram? Se borran las conversaciones guardadas en Hablemos y las personas conectadas (los contactos con WhatsApp se mantienen).'))return;
+    stopPolling();
+    state.contacts=state.contacts.filter(c=>c.phone);
+    for(const c of state.contacts)delete c.telegramId;
+    if(!selected())state.selectedContactId=null;
+    state.tg=tgInitial();persist();renderTgDialog();renderSelectedContact();$('incoming').hidden=true;notify('Telegram desconectado');
   }
   function updateOffline(){$('offline').hidden=navigator.onLine;}
   function updatePrefs(){
@@ -395,7 +643,8 @@
     $('touchHint').textContent=tips.join(' ');$('touchHint').hidden=!tips.length;
   }
   // V0.3: protección de toques. Solo afecta a los botones del tablero, no a los formularios de configuración.
-  const boardButton=target=>{const b=target instanceof Element?target.closest('button'):null;return b&&!b.closest('dialog')?b:null;};
+  // Los diálogos con data-board (como la confirmación de envío) también están protegidos.
+  const boardButton=target=>{const b=target instanceof Element?target.closest('button'):null;return b&&!b.closest('dialog:not([data-board])')?b:null;};
   let holdTimer=null,holdBtn=null,holdStart=null,lastAccepted=0;
   function cancelHold(){clearTimeout(holdTimer);holdTimer=null;if(holdBtn)holdBtn.classList.remove('holding');holdBtn=null;}
   document.addEventListener('pointerdown',e=>{
@@ -493,7 +742,35 @@
     state.ownPhrases.push(s);state.category='propias';persist();renderCategories();renderPhrases();$('newPhrase').value='';$('phraseDialog').close();notify('Frase personal guardada');
   });
   window.addEventListener('online',updateOffline);window.addEventListener('offline',updateOffline);
-  renderSelectedContact();renderCategories();renderPhrases();renderTokens();renderPunctuation();renderBuildCategories();renderBuildTiles();updatePrefs();updateOffline();setMode(state.mode);
+  // Telegram
+  $('tgBtn').addEventListener('click',sendTelegram);
+  $('builderTgBtn').addEventListener('click',sendTelegram);
+  $('sendYes').addEventListener('click',()=>{
+    if(Date.now()-sendOpenedAt<600)return; // evita que un doble toque confirme sin querer
+    $('sendDialog').close();doSendTelegram();
+  });
+  $('sendNo').addEventListener('click',()=>$('sendDialog').close());
+  $('tgOpen').addEventListener('click',()=>{$('settingsDialog').close();renderTgDialog();$('tgDialog').showModal();});
+  $('tgConnect').addEventListener('click',connectTelegram);
+  $('tgRefresh').addEventListener('click',()=>{if(!navigator.onLine){notify('Se necesita internet.');return;}reportPending=true;kickPolling();notify('Buscando…');});
+  $('tgCopyLink').addEventListener('click',async()=>{try{await navigator.clipboard.writeText(botLink());notify('Enlace copiado');}catch(e){notify('No se pudo copiar. El enlace es: '+botLink());}});
+  $('tgShareLink').addEventListener('click',async()=>{
+    const text='Para recibir mensajes de Hablemos, abrí este enlace y tocá «Iniciar»: '+botLink();
+    if(navigator.share){try{await navigator.share({title:'Hablemos',text});}catch(e){}}
+    else window.open('https://wa.me/?text='+encodeURIComponent(text),'_blank','noopener');
+  });
+  $('tgAutoRead').addEventListener('change',e=>{state.tg.autoRead=e.target.checked;persist();});
+  $('tgConfirm').addEventListener('change',e=>{state.tg.confirm=e.target.checked;persist();});
+  $('tgDisconnect').addEventListener('click',disconnectTelegram);
+  $('incomingSay').addEventListener('click',()=>talk($('incomingText').textContent));
+  $('incomingReply').addEventListener('click',()=>{
+    if(incomingContactId&&state.contacts.some(c=>c.id===incomingContactId)){state.selectedContactId=incomingContactId;persist();renderSelectedContact();}
+    $('incoming').hidden=true;setMode('build');$('chatCard').scrollIntoView({behavior:'smooth',block:'start'});
+  });
+  $('incomingClose').addEventListener('click',()=>{$('incoming').hidden=true;});
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')startPolling();else stopPolling();});
+  window.addEventListener('online',startPolling);
+  renderSelectedContact();renderCategories();renderPhrases();renderTokens();renderPunctuation();renderBuildCategories();renderBuildTiles();updatePrefs();updateOffline();setMode(state.mode);renderTgStatus();startPolling();
   // Secure origin is required for an installable Android PWA and service worker.
   if('serviceWorker' in navigator && (location.protocol==='https:'||location.hostname==='localhost')){
     window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));
