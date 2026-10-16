@@ -9,7 +9,7 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Hablemos">
-  <title>Hablemos 2.1 · Conversaciones sin escribir</title>
+  <title>Hablemos 2.2 · Conversaciones sin escribir</title>
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./assets/icon-192.png" type="image/png">
   <style>
@@ -386,6 +386,36 @@
     .act.dim{opacity:.55}
     .incoming,.join{box-shadow:0 6px 20px #00000066}
     .touch-hint,.offline{box-shadow:0 4px 14px #00000059}
+      /* ===== V2.2: ventanas claras y prolijas (sin depender del modo oscuro del teléfono) ===== */
+    dialog{background:#f4f6fc;color:#1b2547;color-scheme:light;border:0;box-shadow:0 24px 70px #00000088}
+    dialog::backdrop{background:#030a26b8;backdrop-filter:blur(4px)}
+    .modalhead{background:#fff;border-bottom:1px solid #e1e6f4;padding:14px 16px 14px 20px}
+    .modalhead h2{color:#16214a;font-size:1.25rem;font-weight:850}
+    .modalclose{background:#eef1fb;border:0;color:#2a3566;border-radius:14px;font-weight:700;min-width:48px;min-height:48px}
+    .modalclose:active{background:#dde3f8}
+    .modalbody{padding:6px 18px 26px}
+    dialog .settings-group{color:#2f4fa8;font-size:1.06rem;font-weight:850;border-top:1px solid #dfe4f3;margin:26px 0 4px;padding-top:20px}
+    dialog .settings-group:first-child{margin-top:12px;border-top:0;padding-top:0}
+    dialog label.field{color:#1b2547;font-size:.95rem;font-weight:750}
+    dialog .settingrow{border-bottom-color:#e3e7f4;padding:14px 0}
+    dialog .settingrow label{color:#1b2547;font-weight:700}
+    dialog .formhint{color:#56607f;font-size:.88rem}
+    dialog .formhint b{color:#2a3566}
+    dialog a{color:#2f4fa8;font-weight:700}
+    dialog .forminput{background:#fff;border:1.5px solid #c8d1ec;border-radius:14px;color:#1b2547;font-size:1rem}
+    dialog .forminput:focus{outline:3px solid #2f4fa840;border-color:#2f4fa8}
+    dialog .clear{background:#fff;border:1.5px solid #cdd5ee;color:#24306a;border-radius:14px}
+    dialog .clear:active{background:#eef1fb}
+    dialog .clear.danger{color:#a3262e;border-color:#f0c9cc}
+    dialog .formbtn{background:linear-gradient(145deg,#3456b8,#24408e);border-radius:16px}
+    dialog .sample,dialog .conn-status{background:#e8ecfa;color:#24306a}
+    /* Interruptores grandes en lugar de casillas chicas */
+    dialog .settingrow input[type=checkbox]{appearance:none;-webkit-appearance:none;flex:none;width:56px;min-width:56px;height:32px;min-height:32px;border-radius:32px;background:#cdd4ea;position:relative;cursor:pointer;transition:background .15s ease;margin:0}
+    dialog .settingrow input[type=checkbox]::before{content:'';position:absolute;top:3px;left:3px;width:26px;height:26px;border-radius:50%;background:#fff;box-shadow:0 1px 4px #0003;transition:transform .15s ease}
+    dialog .settingrow input[type=checkbox]:checked{background:#2f4fa8}
+    dialog .settingrow input[type=checkbox]:checked::before{transform:translateX(24px)}
+    dialog .settingrow input[type=checkbox]:focus-visible{outline:3px solid #2f4fa866;outline-offset:2px}
+    @media(prefers-reduced-motion:reduce){dialog .settingrow input[type=checkbox],dialog .settingrow input[type=checkbox]::before{transition:none}}
   </style>
 </head>
 <body>
@@ -713,6 +743,6 @@
   </dialog>
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
   <script src="./icons.js?v=1.5" defer></script>
-  <script src="./app.js?v=2.1" defer></script>
+  <script src="./app.js?v=2.2" defer></script>
 </body>
 </html>
