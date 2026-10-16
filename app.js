@@ -335,11 +335,17 @@
     const voices=window.speechSynthesis.getVoices();
     const spanish=voices.filter(v=>v.lang.toLowerCase().startsWith('es'));
     const rank=v=>v.lang.toLowerCase().replace('_','-')==='es-ar'?0:/^es[-_](419|us|mx|uy|cl|co)/i.test(v.lang)?1:2;
-    return (spanish.length?spanish:voices).slice().sort((a,b)=>rank(a)-rank(b)||a.name.localeCompare(b.name));
+    return (spanish.length?spanish:voices).slice().sort((a,b)=>(isMale(b)-isMale(a))||rank(a)-rank(b)||(b.localService-a.localService)||a.name.localeCompare(b.name));
   }
+  // La Web Speech API no informa si una voz es de hombre o de mujer: se deduce por el nombre de la voz.
+  const maleNames=/(^|[^a-záéíóúñ])(ra[uú]l|pablo|jorge|[aá]lvaro|tom[aá]s|gonzalo|diego|juan|carlos|enrique|andr[eé]s|gerardo|lorenzo|mateo|alonso|emilio|jos[eé]|manuel|miguel|sergio|el[ií]as|arnau|dar[ií]o|sa[uú]l|jaime|federico|alejandro|hombre|masculin[oa]|male)([^a-záéíóúñ]|$)/i;
+  const femaleNames=/(^|[^a-záéíóúñ])(sabina|helena|laura|elena|paulina|m[oó]nica|marisol|isabela|dalia|elvira|abril|mar[ií]a|luc[ií]a|elsa|paloma|valentina|camila|catalina|renata|beatriz|sof[ií]a|ximena|irene|esperanza|ver[oó]nica|mujer|femenin[oa]|female)([^a-záéíóúñ]|$)/i;
+  const isMale=v=>maleNames.test(v.name)&&!femaleNames.test(v.name);
+  const genderLabel=v=>isMale(v)?' · hombre':femaleNames.test(v.name)?' · mujer':'';
   function pickVoice(){
     const voices=spanishVoices();
-    return voices.find(v=>v.voiceURI===state.voiceURI)||voices.find(v=>v.lang.toLowerCase().replace('_','-')==='es-ar')||voices.find(v=>v.lang.toLowerCase().startsWith('es'))||null;
+    // Sin elección manual, spanishVoices() ya ordena primero las voces de hombre.
+    return voices.find(v=>v.voiceURI===state.voiceURI)||voices.find(v=>v.lang.toLowerCase().startsWith('es'))||null;
   }
   function talk(phrase){
     const m=(phrase||'').trim();if(!m){notify('Primero prepará un mensaje.');return;}
@@ -355,10 +361,12 @@
   function speakMessage(){learnFromMessage();talk(state.message);}
   function renderVoiceSettings(){
     const select=$('voiceSelect');select.replaceChildren();
-    const auto=document.createElement('option');auto.value='';auto.textContent='Automática (español)';select.append(auto);
-    for(const v of spanishVoices()){
-      const o=document.createElement('option');o.value=v.voiceURI;o.textContent=v.name+' · '+v.lang+(v.localService?'':' (necesita internet)');select.append(o);
+    const voices=spanishVoices();
+    const auto=document.createElement('option');auto.value='';auto.textContent='Automática (voz de hombre)';select.append(auto);
+    for(const v of voices){
+      const o=document.createElement('option');o.value=v.voiceURI;o.textContent=v.name+' · '+v.lang+genderLabel(v)+(v.localService?'':' (necesita internet)');select.append(o);
     }
+    $('noMaleVoice').hidden=!hasVoice()||!voices.length||voices.some(isMale);
     select.value=spanishVoices().some(v=>v.voiceURI===state.voiceURI)?state.voiceURI:'';
     $('voiceRate').value=state.rate;$('voicePitch').value=state.pitch;$('voiceVolume').value=state.volume;
     $('rateValue').textContent=state.rate<.8?'lenta':state.rate>1.1?'rápida':'normal';

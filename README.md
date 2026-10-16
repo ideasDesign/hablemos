@@ -1,6 +1,11 @@
-# Hablemos V0.3 — Crear conversaciones sin escribir
+# Hablemos V0.3.1 — Crear conversaciones sin escribir
 
 **Prototipo accesible para Android**. Diseñado para una persona que comprende texto y puede pulsar botones grandes, pero no puede hablar y tiene dificultad para escribir.
+
+## Cambios de la versión 0.3.1
+
+- **Voz de hombre por defecto:** la opción «Automática» elige primero una voz de hombre en español. En la lista de voces se indica «hombre» o «mujer» cuando se reconoce por el nombre de la voz.
+- Si el teléfono no tiene una voz de hombre reconocible (habitual en Android, donde las voces se llaman solo «Español»), Configuración muestra los pasos para elegirla en el sistema: **Ajustes → Salida de texto a voz → Servicios de voz de Google ⚙ → Instalar datos de voz → Español**, y marcar una voz de hombre. Conviene descargarla para usarla sin internet.
 
 ## Cambios de la versión 0.3
 

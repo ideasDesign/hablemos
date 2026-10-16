@@ -9,7 +9,7 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Hablemos">
-  <title>Hablemos 0.3 · Conversaciones sin escribir</title>
+  <title>Hablemos 0.3.1 · Conversaciones sin escribir</title>
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./assets/icon-192.png" type="image/png">
   <style>
@@ -127,6 +127,9 @@
     .suggestion.learned{background:#fdeccb;border-color:#b77d1f}
     .suggestion.learned::before{content:'★ ';color:#a86a0c}
     .touch-hint{margin-top:10px;background:#f7e3b2;color:#3d2a07;border-radius:12px;padding:9px 12px;font-size:.88rem;font-weight:750;line-height:1.4}
+    .voice-help{background:#fff3de;border:2px solid #d49737;border-radius:14px;padding:12px 14px;margin:12px 0 4px;color:#4a3207;font-size:.9rem;line-height:1.5}
+    .voice-help ol{margin:8px 0;padding-left:20px}
+    .voice-help li{margin:4px 0}
     .settings-group{margin:24px 0 2px;font-size:1.02rem;color:var(--primary);border-top:2px solid var(--line);padding-top:16px}
     .settings-group:first-child{margin-top:0;border-top:0;padding-top:0}
     select.forminput{appearance:auto}
@@ -283,6 +286,17 @@
 
       <h3 class="settings-group">Voz</h3>
       <p id="noVoice" class="error" hidden>Este navegador no tiene síntesis de voz disponible.</p>
+      <div id="noMaleVoice" class="voice-help" hidden>
+        <strong>No se reconoció una voz de hombre en este teléfono.</strong> En Android la voz se elige en el sistema:
+        <ol>
+          <li>Abrir <b>Ajustes</b> y buscar <b>«Salida de texto a voz»</b> (suele estar en Sistema → Idiomas, o en Accesibilidad).</li>
+          <li>Elegir <b>Servicios de voz de Google</b> como motor y tocar el engranaje ⚙.</li>
+          <li>Entrar en <b>Instalar datos de voz</b> → <b>Español</b> (Estados Unidos o España).</li>
+          <li>Probar las voces y dejar marcada una de <b>hombre</b>. Conviene descargarla para que funcione sin internet.</li>
+          <li>Volver a Hablemos y tocar <b>Probar voz</b>.</li>
+        </ol>
+        Mientras tanto, bajar el <b>Tono</b> hace la voz un poco más grave.
+      </div>
       <label class="field" for="voiceSelect">Voz</label>
       <select id="voiceSelect" class="forminput"></select>
       <label class="field range-label" for="voiceRate">Velocidad <span id="rateValue">normal</span></label>
