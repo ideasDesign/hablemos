@@ -101,7 +101,7 @@
   const repeatOptions=[0,500,1000,2000];
   const initial = {contacts:[],selectedContactId:null,ownPhrases:[],message:'',category:'frecuentes',combine:false,large:false,contrast:false,
     tokens:[],punctuation:'.',buildCategory:'inicio',savedMessages:[],customBlocks:[],mode:'build',
-    suggest:true,aiReplies:true,pictos:true,cloudVoice:true,learned:{},replyLearned:{},voiceURI:'',rate:.9,pitch:1,volume:1,holdMs:0,repeatMs:0,lastBackup:0};
+    suggest:true,aiReplies:true,pictos:true,cloudVoice:true,learned:{},replyLearned:{},phraseLearned:{},voiceURI:'',rate:.9,pitch:1,volume:1,holdMs:0,repeatMs:0,lastBackup:0};
   const clampNumber=(value,min,max,fallback)=>typeof value==='number'&&isFinite(value)?Math.min(max,Math.max(min,value)):fallback;
   // V0.4: Telegram. threads = {chatId: [{dir:'in'|'out', text, date}]}; pending = personas que tocaron «Iniciar» y aún no están vinculadas.
   // V0.6: server = {url, pin} cuando Hablemos se conecta a su propio servidor (el token queda en el servidor). seq/pv = hasta dónde se sincronizó.
@@ -109,7 +109,7 @@
   const DEFAULT_SERVER_URL='https://hablemos-production.up.railway.app';
   const serverUrlOk=v=>typeof v==='string'&&/^https?:\/\/[^\s/]+(:\d+)?\/?$/.test(v);
   const chatIdOk=v=>typeof v==='string'&&/^-?\d{1,20}$/.test(v);
-  let state = {...initial,learned:{},replyLearned:{},tg:tgInitial()};
+  let state = {...initial,learned:{},replyLearned:{},phraseLearned:{},tg:tgInitial()};
   function loadStored(key) {
     try {
       const value = JSON.parse(localStorage.getItem(key));
@@ -119,7 +119,7 @@
   const STORE_KEY='hablemos.v3';
   // Lee y valida los datos guardados. Se usa al abrir y cuando otra pestaña de Hablemos guarda cambios.
   function applyStored(stored){
-    state={...initial,learned:{},replyLearned:{},tg:tgInitial()};
+    state={...initial,learned:{},replyLearned:{},phraseLearned:{},tg:tgInitial()};
     if(!stored)return;
     if(Array.isArray(stored.contacts)) state.contacts=stored.contacts.filter(x=>x&&typeof x.name==='string'&&typeof x.phone==='string'&&typeof x.id==='string').slice(0,50).map(x=>({id:x.id,name:x.name.slice(0,36),phone:x.phone.replace(/\D/g,''),...(chatIdOk(x.telegramId)?{telegramId:x.telegramId}:{})}));
     const tg=stored.tg;
@@ -161,6 +161,13 @@
     if(typeof stored.aiReplies==='boolean')state.aiReplies=stored.aiReplies;
     if(typeof stored.cloudVoice==='boolean')state.cloudVoice=stored.cloudVoice;
     if(typeof stored.pictos==='boolean')state.pictos=stored.pictos;
+    if(stored.phraseLearned&&typeof stored.phraseLearned==='object'&&!Array.isArray(stored.phraseLearned)){
+      for(const [key,counts] of Object.entries(stored.phraseLearned).slice(0,150)){
+        if(key.length>200||!counts||typeof counts!=='object')continue;
+        const clean={};for(const [p,n] of Object.entries(counts).slice(0,8))if(p.length<=140&&Number.isInteger(n)&&n>0)clean[p]=Math.min(n,999);
+        state.phraseLearned[key]=clean;
+      }
+    }
     if(stored.replyLearned&&typeof stored.replyLearned==='object'&&!Array.isArray(stored.replyLearned)){
       for(const [intent,counts] of Object.entries(stored.replyLearned).slice(0,40)){
         if(!/^[a-z-]{2,20}$/.test(intent)||!counts||typeof counts!=='object')continue;
@@ -313,6 +320,53 @@
       .finally(()=>{if(view.startsWith('reply:'+c.id))renderBoard();});
     return entry;
   }
+  // ===== V2.0: completar frases con IA =====
+  // Desde la segunda palabra, la primera fila del tablero ofrece frases enteras que empiezan así.
+  // Esos lugares quedan reservados mientras la IA piensa («Pensando…»), para que los botones no se muevan bajo el dedo.
+  // Las frases que Diego elige se aprenden y aparecen primero, también sin internet.
+  const completeCache=new Map();let completeTimer=null,completePending=null;
+  const aiPhrasesOn=()=>aiOn()&&navigator.onLine;
+  function contextContact(){
+    // La persona que escribió hace poco (últimas 6 horas): la IA tiene en cuenta su último mensaje.
+    let best=null,bestDate=Date.now()-6*3600e3;
+    for(const c of tgContacts()){const m=lastIncoming(c);if(m&&!m.audio&&m.date>bestDate){best=c;bestDate=m.date;}}
+    return best;
+  }
+  function phraseTiles(){
+    const words=state.tokens.join(' ');const key=normText(words);
+    const slots=boardCols()>=3?3:2;
+    const out=[],seen=new Set();
+    const push=(p,ai)=>{const n=normText(p);if(!n||n===key||seen.has(n)||out.length>=slots)return;seen.add(n);out.push(tile('phrase',p,()=>choosePhrase(p,key),ai?'✨':'⭐'));};
+    Object.entries(state.phraseLearned[key]||{}).sort((a,b)=>b[1]-a[1]).forEach(([p])=>push(p,false));
+    if(!aiPhrasesOn()||out.length>=slots)return out;
+    const c=contextContact();const ckey=key+'|'+(c?c.telegramId+':'+(lastIncoming(c).id||''):'');
+    let e=completeCache.get(ckey);
+    if(!e){
+      // Se espera un momento a que Diego deje de tocar palabras antes de pedir.
+      if(completePending&&completePending!==ckey&&(completeCache.get(completePending)||{}).status==='wait')completeCache.delete(completePending);
+      clearTimeout(completeTimer);
+      e={status:'wait',phrases:[]};completeCache.set(ckey,e);completePending=ckey;
+      if(completeCache.size>80)completeCache.delete(completeCache.keys().next().value);
+      completeTimer=setTimeout(()=>fetchComplete(e,words,c),700);
+    }
+    if(e.status==='done')e.phrases.forEach(p=>push(p,true));
+    else if(e.status==='wait'||e.status==='loading')while(out.length<slots)out.push(tile('aiwait','Pensando frases…',()=>{},'✨'));
+    return out;
+  }
+  function fetchComplete(e,words,c){
+    e.status='loading';
+    srvCall('/api/complete',{method:'POST',body:{words,chatId:c?c.telegramId:''}})
+      .then(r=>{e.status='done';e.phrases=(Array.isArray(r.phrases)?r.phrases:[]).filter(x=>typeof x==='string'&&x.trim()).slice(0,4);})
+      .catch(()=>{e.status='error';})
+      .finally(()=>{if(view==='main')renderBoard();});
+  }
+  function choosePhrase(p,key){
+    const counts=state.phraseLearned[key]||(state.phraseLearned[key]={});
+    if(!(p in counts)&&Object.keys(counts).length>=8)delete counts[Object.entries(counts).sort((a,b)=>a[1]-b[1])[0][0]];
+    counts[p]=Math.min((counts[p]||0)+1,999);
+    const keys=Object.keys(state.phraseLearned);if(keys.length>150)delete state.phraseLearned[keys[0]];
+    selectPhrase(p);
+  }
   function openReply(c){state.selectedContactId=c.id;markRead(c);persist();view='reply:'+c.id;page=0;renderScreen();}
   // Elegir una respuesta abre «¿A quién se lo mando?» con esa persona primero: responder son dos toques.
   function chooseReply(text,c,intent){
@@ -375,6 +429,7 @@
           items.push(tile('folder',chats.length===1?'Mensajes de '+chats[0].name:'Mensajes',()=>chats.length===1?openChat(chats[0]):go('people'),'💬',unread?unread+(unread===1?' nuevo':' nuevos'):''));
         }
       }
+      if(state.tokens.length>=2)items.push(...phraseTiles());
       if(state.suggest)for(const {word,learned} of getSuggestions(state.tokens.length?8:6))items.push(tile(learned?'learned':'word',word,()=>addBlock(word)));
       items.push(tile('folder',state.suggest?'Más palabras':'Palabras',()=>go('folders'),'📂'));
       return items;
@@ -460,7 +515,7 @@
     const l=document.createElement('span');l.className='lbl';l.textContent=t.label;b.append(l);
     if(t.extra){const x=document.createElement('span');x.className='badge';x.textContent=t.extra;b.append(x);}
     if(t.kind==='learned'){const st=svgIcon('star','mark');if(st)b.append(st);}
-    b.setAttribute('aria-label',(t.kind==='word'||t.kind==='learned'?'Agregar: ':t.kind==='reply'?'Responder: ':t.kind==='quote'?'Escuchar: ':'')+t.label+(t.extra?', '+t.extra:''));
+    b.setAttribute('aria-label',(t.kind==='aiwait'?'':t.kind==='phrase'&&t.icon==='✨'?'Frase sugerida: ':t.kind==='word'||t.kind==='learned'?'Agregar: ':t.kind==='reply'?'Responder: ':t.kind==='quote'?'Escuchar: ':'')+t.label+(t.extra?', '+t.extra:''));
     b.addEventListener('click',t.onTap);
     return b;
   }

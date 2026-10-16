@@ -106,6 +106,49 @@ Cómo tienen que ser las respuestas:
 - Si preguntan algo que solo "Yo" sabe (una hora, un lugar, una preferencia), ofrecé varias opciones posibles en vez de elegir una.
 - Naturales y cálidas, como hablaría una persona adulta con su familia. Sin emojis.
 - No respondas el mensaje vos: devolvé solamente las opciones.`;
+// V2.0: completar frases. Diego toca algunas palabras y la IA propone frases enteras que empiezan así.
+const AI_COMPLETE_SYSTEM = `Ayudás a una persona adulta que no puede hablar ni escribir. Arma lo que quiere decir tocando palabras sueltas en botones grandes, y tocar le cuesta mucho, así que le ofrecés frases completas para elegir con un solo toque.
+
+Vas a recibir las palabras que eligió hasta ahora, en orden. A veces también recibís el último mensaje que le mandó un familiar, como contexto.
+
+Proponé 4 frases completas que esa persona probablemente quiere decir:
+- Que empiecen con esas palabras (podés corregir la concordancia o agregar lo que falte entre ellas) y las completen de forma natural.
+- En español rioplatense (con "vos"), en primera persona, como habla un adulto con su familia o su cuidador.
+- Cortas: de 3 a 12 palabras, con la puntuación correcta (¿…? si es pregunta).
+- Distintas entre sí: cosas diferentes que podría querer, no la misma idea con otras palabras.
+- Si hay un mensaje de un familiar y las palabras parecen responderle, que las frases vengan al caso.
+- Sin emojis. Devolvé solamente las frases.`;
+const completeCache = new Map(); // palabras + contexto → frases (para no volver a pedir lo mismo)
+async function completePhrases(words, context) {
+  const key = words.toLocaleLowerCase('es') + '|' + (context ? context.seq : '');
+  if (completeCache.has(key)) return { phrases: completeCache.get(key), cached: true };
+  const now = Date.now();
+  while (aiCalls.length && now - aiCalls[0] > 3600e3) aiCalls.shift();
+  if (aiCalls.length >= 60) throw Object.assign(new Error('limit'), { code: 'ai-limit' });
+  aiCalls.push(now);
+  const request = {
+    model: AI_MODEL,
+    max_tokens: 3000,
+    system: AI_COMPLETE_SYSTEM,
+    output_config: {
+      effort: 'low',
+      format: { type: 'json_schema', schema: { type: 'object', properties: { phrases: { type: 'array', items: { type: 'string' } } }, required: ['phrases'], additionalProperties: false } }
+    },
+    messages: [{ role: 'user', content: (context ? `Último mensaje del familiar: «${context.text.slice(0, 400)}»\n\n` : '') + `Palabras elegidas hasta ahora: «${words}»` }]
+  };
+  if (AI_FALLBACKS) { request.betas = ['server-side-fallback-2026-07-01']; request.fallbacks = 'default'; }
+  const response = await ai.beta.messages.create(request);
+  let phrases = [];
+  if (response.stop_reason !== 'refusal') {
+    const text = response.content.filter(b => b.type === 'text').map(b => b.text).join('');
+    try { phrases = JSON.parse(text).phrases; } catch (e) { phrases = []; }
+  }
+  phrases = [...new Set((Array.isArray(phrases) ? phrases : []).filter(r => typeof r === 'string').map(r => r.trim()).filter(r => r && r.length <= 140))].slice(0, 4);
+  completeCache.set(key, phrases);
+  if (completeCache.size > 300) completeCache.delete(completeCache.keys().next().value);
+  console.log(`Frases completadas con IA: ${phrases.length} (modelo ${response.model}, ${response.usage.input_tokens} tokens de entrada + ${response.usage.output_tokens} de salida).`);
+  return { phrases };
+}
 let lastHelpAt = 0, lastHelpSent = 0;
 // ---------- Voz natural con ElevenLabs (opcional) ----------
 // La clave vive solo acá (ELEVENLABS_API_KEY). Cada frase se genera una sola vez y se guarda en el disco,
@@ -481,6 +524,24 @@ const server = http.createServer(async (req, res) => {
           res.writeHead(200, { 'content-type': 'audio/mpeg', 'content-length': audio.length, 'cache-control': 'private, max-age=31536000', ...cors });
           return res.end(audio);
         } catch (e) { return send(res, e.code === 'tts-limit' || e.code === 'tts-busy' ? 429 : 502, { error: e.code || 'tts-error' }, cors); }
+      }
+      if (url.pathname === '/api/complete') {
+        if (!ai) return send(res, 503, { error: 'ai-off' }, cors);
+        const words = String(body.words || '').replace(/\s+/g, ' ').trim().slice(0, 200);
+        if (words.split(' ').length < 2) return send(res, 400, { error: 'few-words' }, cors);
+        // Contexto: solo el texto del último mensaje recibido de esa persona, si es de las últimas 6 horas. Sin nombres.
+        let context = null;
+        if (person && person.status === 'linked') {
+          const last = [...db.messages].reverse().find(m => m.chatId === chatId && m.dir === 'in' && !m.audio);
+          if (last && Date.now() - last.date < 6 * 3600e3) context = { seq: last.seq, text: last.text };
+        }
+        try { return send(res, 200, { ok: true, ...(await completePhrases(words, context)) }, cors); }
+        catch (e) {
+          if (e.code === 'ai-limit') return send(res, 429, { error: 'ai-limit' }, cors);
+          if (AnthropicSDK && e instanceof AnthropicSDK.APIError) console.error('Error de la API de Claude al completar frases:', e.status, e.message);
+          else console.error('No se pudieron completar frases:', e.message);
+          return send(res, 502, { error: 'ai-error' }, cors);
+        }
       }
       if (url.pathname === '/api/suggest') {
         if (!ai) return send(res, 503, { error: 'ai-off' }, cors);

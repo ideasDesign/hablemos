@@ -1,6 +1,14 @@
-# Hablemos V1.9 — Crear conversaciones sin escribir
+# Hablemos V2.0 — Crear conversaciones sin escribir
 
 **Prototipo accesible para Android**. Diseñado para una persona que comprende texto y puede pulsar botones grandes, pero no puede hablar y tiene dificultad para escribir.
+
+## Cambios de la versión 2.0: completar frases con IA
+
+- Desde la segunda palabra, la primera fila del tablero ofrece frases completas que empiezan así (✨), pensadas por Claude. Un toque la dice en voz alta y la deja lista para enviar.
+- Mientras la IA piensa, esos lugares muestran «Pensando frases…», así los botones no se mueven bajo el dedo.
+- Si alguien escribió en las últimas 6 horas, la IA tiene en cuenta ese último mensaje (sin nombres).
+- Las frases que Diego elige se aprenden (⭐) y aparecen primero, también sin internet.
+- Usa el mismo interruptor y el mismo tope de gasto (60 pedidos por hora) que las respuestas sugeridas.
 
 ## Cambios de la versión 1.9: voz natural con ElevenLabs
 
@@ -269,8 +277,8 @@ Los datos (contactos, frases, palabras aprendidas) se guardan **solo en ese tel�
 
 ### Publicar una nueva versión
 
-1. Cambiar el nombre de la caché en `sw.js` (por ejemplo `hablemos-offline-v26` → `hablemos-offline-v27`), para actualizar la copia que se usa sin conexión.
-2. En `index.html`, cambiar la versión del script: `app.js?v=1.9` → `app.js?v=1.9.1`. **Si no se cambia, el navegador puede seguir usando el `app.js` anterior hasta 10 minutos.**
+1. Cambiar el nombre de la caché en `sw.js` (por ejemplo `hablemos-offline-v27` → `hablemos-offline-v28`), para actualizar la copia que se usa sin conexión.
+2. En `index.html`, cambiar la versión del script: `app.js?v=2.0` → `app.js?v=2.0.1`. **Si no se cambia, el navegador puede seguir usando el `app.js` anterior hasta 10 minutos.**
 3. Guardar los cambios con git y subirlos: `git commit -am "…"` y `git push`.
 4. En uno o dos minutos GitHub Pages publica la nueva versión. Con internet, la próxima vez que se abra Hablemos ya carga la nueva.
 

@@ -9,7 +9,7 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Hablemos">
-  <title>Hablemos 1.9 · Conversaciones sin escribir</title>
+  <title>Hablemos 2.0 · Conversaciones sin escribir</title>
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./assets/icon-192.png" type="image/png">
   <style>
@@ -346,6 +346,11 @@
     .tile.back,.tile.nav{background:#e7ebfb;border-color:#cdd5f2;color:#2a3566}
     .tile.back svg.ico,.tile.nav svg.ico{color:#4a5a92}
     .tile.reply{border-left-color:#3f62c9}.tile.reply svg.ico{color:#3f62c9}
+    /* V2.0: frases completadas con IA */
+    .tile.aiwait{background:#ffffff14;border:2px dashed #ffffff55;color:#dfe6ff;box-shadow:none;pointer-events:none}
+    .tile.aiwait svg.ico{color:#c9d4ff;animation:aipulse 1.4s ease-in-out infinite}
+    @keyframes aipulse{50%{opacity:.35}}
+    @media(prefers-reduced-motion:reduce){.tile.aiwait svg.ico{animation:none}}
     .tile.quote{background:#e6ebfd;border-color:#ccd5f5;border-left-color:#3a5cc0;color:#1f2d63}
     .tile.quote svg.ico{color:#3a5cc0}
     .tile.person{background:linear-gradient(145deg,#4766cc,#6a58c8);border-color:#5a5fca;color:#fff}
@@ -652,8 +657,8 @@
         <div class="settingrow"><label for="tgAutoRead">Leer en voz alta los mensajes que llegan</label><input id="tgAutoRead" type="checkbox"></div>
         <div class="settingrow"><label for="tgChime">Sonar y vibrar cuando llega un mensaje</label><input id="tgChime" type="checkbox"></div>
         <div id="aiRow" hidden>
-          <div class="settingrow"><label for="aiReplies">✨ Sugerir respuestas con inteligencia artificial (Claude)</label><input id="aiReplies" type="checkbox"></div>
-          <p class="formhint">Al tocar «Responder», además de las respuestas listas aparecen otras pensadas para ese mensaje. Se envían a Claude solo los últimos mensajes de esa conversación, sin nombres ni teléfonos.</p>
+          <div class="settingrow"><label for="aiReplies">✨ Sugerir respuestas y completar frases con inteligencia artificial (Claude)</label><input id="aiReplies" type="checkbox"></div>
+          <p class="formhint">Al tocar «Responder», además de las respuestas listas aparecen otras pensadas para ese mensaje. Y al tocar dos o más palabras, arriba aparecen frases completas que empiezan así. Se envían a Claude solo las palabras elegidas y los últimos mensajes de la conversación, sin nombres ni teléfonos.</p>
         </div>
         <p class="formhint">Solo se muestran y leen mensajes de personas conectadas. Si escribe alguien desconocido, aparece en el paso 4 para aprobarlo o ignorarlo.</p>
         <button id="tgDisconnect" type="button" class="clear wide danger">Desconectar Telegram</button>
@@ -693,6 +698,6 @@
   </dialog>
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
   <script src="./icons.js?v=1.5" defer></script>
-  <script src="./app.js?v=1.9" defer></script>
+  <script src="./app.js?v=2.0" defer></script>
 </body>
 </html>
