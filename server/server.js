@@ -8,6 +8,9 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+// Avisos push (notificaciones del teléfono aunque Hablemos esté cerrada). Si la librería falta, el resto sigue funcionando.
+let webpush = null;
+try { webpush = require('web-push'); } catch (e) { console.warn('web-push no está instalado: no habrá notificaciones push.'); }
 
 // Corrige errores comunes al pegar el token: comillas, espacios o saltos de línea, y la palabra «bot» delante.
 const RAW_TOKEN = process.env.TELEGRAM_TOKEN || '';
@@ -39,7 +42,8 @@ const LONG_POLL_MS = 25000;
 // people[chatId] = {chatId, name, username, status: 'pending' | 'linked', since, held?: mensajes que esperan aprobación}
 // invite = código del enlace de invitación: quien entra con él queda conectado solo.
 const newInvite = () => crypto.randomBytes(9).toString('base64url');
-let db = { seq: 0, pv: 0, people: {}, messages: [], invite: newInvite() };
+// vapid = claves para firmar los avisos push; pushSubs = teléfonos que pidieron recibir avisos.
+let db = { seq: 0, pv: 0, people: {}, messages: [], invite: newInvite(), vapid: null, pushSubs: [] };
 function load() {
   try {
     const d = JSON.parse(fs.readFileSync(FILE, 'utf8'));
@@ -49,7 +53,9 @@ function load() {
         pv: Number.isInteger(d.pv) ? d.pv : 0,
         people: d.people && typeof d.people === 'object' ? d.people : {},
         messages: Array.isArray(d.messages) ? d.messages : [],
-        invite: typeof d.invite === 'string' && /^[\w-]{8,64}$/.test(d.invite) ? d.invite : newInvite()
+        invite: typeof d.invite === 'string' && /^[\w-]{8,64}$/.test(d.invite) ? d.invite : newInvite(),
+        vapid: d.vapid && typeof d.vapid.publicKey === 'string' && typeof d.vapid.privateKey === 'string' ? d.vapid : null,
+        pushSubs: Array.isArray(d.pushSubs) ? d.pushSubs.filter(validSub).slice(0, 20) : []
       };
     }
   } catch (e) { /* primer arranque: no hay archivo todavía */ }
@@ -78,6 +84,34 @@ function addMessage(m) {
   return msg;
 }
 function touchPeople() { db.pv++; save(); wake(); }
+
+// ---------- Avisos push ----------
+function validSub(sub) {
+  return !!(sub && typeof sub.endpoint === 'string' && /^https:\/\/[^\s]{10,800}$/.test(sub.endpoint) &&
+    sub.keys && typeof sub.keys.p256dh === 'string' && typeof sub.keys.auth === 'string' &&
+    sub.keys.p256dh.length < 200 && sub.keys.auth.length < 100);
+}
+function setupPush() {
+  if (!webpush) return;
+  if (!db.vapid) { db.vapid = webpush.generateVAPIDKeys(); save(); }
+  // El «subject» identifica quién manda los avisos ante el servicio de notificaciones: la dirección pública de la app.
+  webpush.setVapidDetails('https://ideasdesign.github.io/hablemos/', db.vapid.publicKey, db.vapid.privateKey);
+}
+async function notifyAll(payload) {
+  if (!webpush || !db.pushSubs.length) return 0;
+  let sent = 0;
+  for (const sub of [...db.pushSubs]) {
+    try {
+      await webpush.sendNotification({ endpoint: sub.endpoint, keys: sub.keys }, JSON.stringify(payload), { TTL: 6 * 3600, urgency: 'high' });
+      sent++;
+    } catch (e) {
+      // 404/410: el teléfono ya no recibe avisos (se desinstaló o se revocó el permiso).
+      if (e.statusCode === 404 || e.statusCode === 410) { db.pushSubs = db.pushSubs.filter(x => x.endpoint !== sub.endpoint); save(); }
+      else console.error('No se pudo enviar un aviso push:', e.statusCode || e.message);
+    }
+  }
+  return sent;
+}
 
 // ---------- Telegram ----------
 async function tg(method, params) {
@@ -148,8 +182,10 @@ function onUpdate(u) {
     p = db.people[chatId] = { chatId, name, username: (m.from.username || '').slice(0, 64), status: 'pending', since: Date.now(), held: [] };
     touchPeople();
   }
+  const viaInvite = isStart && startCode && startCode === db.invite;
+  if (isNew && !viaInvite) notifyAll({ title: 'Hablemos', body: name + ' quiere conversar con vos por Telegram.', tag: 'join-' + chatId }).catch(() => {});
   // Entró con el enlace de invitación: queda conectado solo, sin que nadie tenga que aprobarlo.
-  if (isStart && startCode && startCode === db.invite) {
+  if (viaInvite) {
     if (p.status !== 'linked') linkPerson(chatId, '', { welcome: true });
     return;
   }
@@ -164,6 +200,7 @@ function onUpdate(u) {
     return;
   }
   addMessage(entry);
+  notifyAll({ title: '📩 ' + p.name, body: entry.text.slice(0, 300), tag: 'chat-' + chatId }).catch(() => {});
 }
 
 // Conecta a una persona: entrega lo que mandó mientras esperaba y (si corresponde) le da la bienvenida.
@@ -246,7 +283,7 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/status' && req.method === 'GET') {
       const b = await getBot();
       if (!webhookOk) await ensureWebhook();
-      return send(res, 200, { ok: true, bot: b, botError, webhook: { ok: webhookOk, error: webhookError }, persistent: PERSISTENT, invite: db.invite }, cors);
+      return send(res, 200, { ok: true, bot: b, botError, webhook: { ok: webhookOk, error: webhookError }, persistent: PERSISTENT, invite: db.invite, pushKey: db.vapid ? db.vapid.publicKey : '', pushDevices: db.pushSubs.length }, cors);
     }
 
     if (url.pathname === '/api/sync' && req.method === 'GET') {
@@ -293,6 +330,24 @@ const server = http.createServer(async (req, res) => {
         const delivered = linkPerson(chatId, name, { welcome: !body.migrate });
         return send(res, 200, { ok: true, delivered }, cors);
       }
+      if (url.pathname === '/api/push/subscribe') {
+        const sub = body.subscription;
+        if (!webpush || !db.vapid) return send(res, 503, { error: 'push-unavailable' }, cors);
+        if (!validSub(sub)) return send(res, 400, { error: 'bad-subscription' }, cors);
+        db.pushSubs = db.pushSubs.filter(x => x.endpoint !== sub.endpoint);
+        db.pushSubs.push({ endpoint: sub.endpoint, keys: { p256dh: sub.keys.p256dh, auth: sub.keys.auth }, since: Date.now() });
+        if (db.pushSubs.length > 20) db.pushSubs.splice(0, db.pushSubs.length - 20);
+        save();
+        return send(res, 200, { ok: true, devices: db.pushSubs.length }, cors);
+      }
+      if (url.pathname === '/api/push/unsubscribe') {
+        db.pushSubs = db.pushSubs.filter(x => x.endpoint !== String(body.endpoint || '')); save();
+        return send(res, 200, { ok: true }, cors);
+      }
+      if (url.pathname === '/api/push/test') {
+        const sent = await notifyAll({ title: 'Hablemos', body: '🔔 Así se van a ver los avisos de mensajes nuevos.', tag: 'test' });
+        return send(res, 200, { ok: true, sent }, cors);
+      }
       if (url.pathname === '/api/invite/new') {
         // Cambia el enlace de invitación (por ejemplo, si llegó a alguien que no debía). Las personas conectadas se mantienen.
         db.invite = newInvite(); touchPeople();
@@ -320,6 +375,7 @@ const server = http.createServer(async (req, res) => {
 });
 
 load();
+setupPush();
 server.listen(PORT, () => {
   console.log(`Hablemos servidor escuchando en el puerto ${PORT}. Datos en ${FILE}${PERSISTENT ? '' : ' (NO persistente: agregá un Volume en Railway)'}.`);
   if (!TOKEN) console.warn('Falta TELEGRAM_TOKEN.');

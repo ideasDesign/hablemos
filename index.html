@@ -9,7 +9,7 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Hablemos">
-  <title>Hablemos 0.8 · Conversaciones sin escribir</title>
+  <title>Hablemos 0.9 · Conversaciones sin escribir</title>
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./assets/icon-192.png" type="image/png">
   <style>
@@ -496,8 +496,16 @@
         <div id="tgPending" class="tg-pending"></div>
         <h3 class="settings-group">Personas conectadas</h3>
         <div id="tgLinked" class="contactlist"></div>
+        <h3 class="settings-group">🔔 Avisos en el teléfono</h3>
+        <p class="formhint">Para que el teléfono avise los mensajes nuevos aunque Hablemos esté cerrada, como hace WhatsApp. Tocar el aviso abre Hablemos.</p>
+        <p id="pushStatus" class="conn-status"></p>
+        <div class="actiongrid">
+          <button id="pushEnable" type="button" class="formbtn">🔔 Activar avisos</button>
+          <button id="pushTest" type="button" class="clear" hidden>Probar un aviso</button>
+        </div>
         <h3 class="settings-group">Opciones</h3>
         <div class="settingrow"><label for="tgAutoRead">Leer en voz alta los mensajes que llegan</label><input id="tgAutoRead" type="checkbox"></div>
+        <div class="settingrow"><label for="tgChime">Sonar y vibrar cuando llega un mensaje</label><input id="tgChime" type="checkbox"></div>
         <p class="formhint">Solo se muestran y leen mensajes de personas conectadas. Si escribe alguien desconocido, aparece en el paso 4 para aprobarlo o ignorarlo.</p>
         <button id="tgDisconnect" type="button" class="clear wide danger">Desconectar Telegram</button>
       </div>
@@ -535,6 +543,6 @@
     </div>
   </dialog>
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
-  <script src="./app.js?v=0.8" defer></script>
+  <script src="./app.js?v=0.9" defer></script>
 </body>
 </html>

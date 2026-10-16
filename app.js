@@ -105,7 +105,7 @@
   const clampNumber=(value,min,max,fallback)=>typeof value==='number'&&isFinite(value)?Math.min(max,Math.max(min,value)):fallback;
   // V0.4: Telegram. threads = {chatId: [{dir:'in'|'out', text, date}]}; pending = personas que tocaron «Iniciar» y aún no están vinculadas.
   // V0.6: server = {url, pin} cuando Hablemos se conecta a su propio servidor (el token queda en el servidor). seq/pv = hasta dónde se sincronizó.
-  const tgInitial=()=>({token:'',server:null,seq:0,pv:-1,bot:null,offset:0,autoRead:true,confirm:true,pending:[],threads:{}});
+  const tgInitial=()=>({token:'',server:null,seq:0,pv:-1,bot:null,offset:0,autoRead:true,confirm:true,chime:true,push:false,pending:[],threads:{}});
   const DEFAULT_SERVER_URL='https://hablemos-production.up.railway.app';
   const serverUrlOk=v=>typeof v==='string'&&/^https?:\/\/[^\s/]+(:\d+)?\/?$/.test(v);
   const chatIdOk=v=>typeof v==='string'&&/^-?\d{1,20}$/.test(v);
@@ -133,6 +133,8 @@
       if(Number.isInteger(tg.offset)&&tg.offset>=0)clean.offset=tg.offset;
       if(typeof tg.autoRead==='boolean')clean.autoRead=tg.autoRead;
       if(typeof tg.confirm==='boolean')clean.confirm=tg.confirm;
+      if(typeof tg.chime==='boolean')clean.chime=tg.chime;
+      if(typeof tg.push==='boolean')clean.push=tg.push;
       if(Array.isArray(tg.pending))clean.pending=tg.pending.filter(p=>p&&chatIdOk(p.chatId)&&typeof p.name==='string').slice(0,20).map(p=>({chatId:p.chatId,name:p.name.slice(0,64),username:typeof p.username==='string'?p.username.slice(0,64):''}));
       if(tg.threads&&typeof tg.threads==='object'){
         for(const [chatId,list] of Object.entries(tg.threads).slice(0,30)){
@@ -380,7 +382,12 @@
     for(const id of ['speakBtn','sendBtn'])$(id).classList.toggle('dim',!has);
     $('eraseBtn').classList.toggle('dim',!has);
   }
-  function renderScreen(){renderMessageStrip();renderBoard();}
+  function renderScreen(){renderMessageStrip();renderBoard();updateBadge();}
+  function updateBadge(){
+    if(!('setAppBadge' in navigator))return;
+    const total=tgContacts().reduce((n,c)=>n+unreadCount(c),0);
+    (total?navigator.setAppBadge(total):navigator.clearAppBadge()).catch(()=>{});
+  }
   // Compatibilidad con el resto del código, que avisa cuando cambian contactos o conversaciones.
   const renderSelectedContact=()=>renderScreen();
   function renderContactList(){
@@ -635,6 +642,7 @@
           if(tgKey()!==key)continue;
           setConn('ok');
           handleServerSync(r);
+          ensurePushOnce();
         }else{
           const updates=await tgCall('getUpdates',{offset:state.tg.offset,timeout,allowed_updates:['message']},ctrl.signal,token);
           setConn('ok');
@@ -679,10 +687,29 @@
   function kickPolling(){quickPoll=true;if(pollCtrl)pollCtrl.abort('kick');else startPolling();}
   function stopPolling(){if(pollCtrl)pollCtrl.abort('stop');}
   let incomingContactId=null;
+  // Timbre corto de dos notas y vibración, para que Diego note que llegó algo aunque no esté mirando.
+  let audioCtx=null;
+  function unlockAudio(){try{audioCtx=audioCtx||new (window.AudioContext||window.webkitAudioContext)();if(audioCtx.state==='suspended')audioCtx.resume();}catch(e){}}
+  document.addEventListener('pointerdown',unlockAudio,{once:true});
+  function chime(){
+    if(!state.tg.chime)return;
+    try{
+      unlockAudio();
+      const t=audioCtx.currentTime,vol=Math.max(.15,state.volume)*.4;
+      for(const [freq,delay] of [[880,0],[1175,.2]]){
+        const o=audioCtx.createOscillator(),g=audioCtx.createGain();
+        o.type='sine';o.frequency.value=freq;
+        g.gain.setValueAtTime(.0001,t+delay);g.gain.exponentialRampToValueAtTime(vol,t+delay+.02);g.gain.exponentialRampToValueAtTime(.0001,t+delay+.4);
+        o.connect(g).connect(audioCtx.destination);o.start(t+delay);o.stop(t+delay+.45);
+      }
+    }catch(e){}
+    try{if(navigator.vibrate)navigator.vibrate([300,120,300]);}catch(e){}
+  }
   function showIncoming(contact,text){
     incomingContactId=contact.id;
     $('incomingName').textContent='📩 '+contact.name+':';$('incomingText').textContent=text;$('incoming').hidden=false;
-    if(state.tg.autoRead)talk(contact.name+' dice: '+text);
+    chime();
+    if(state.tg.autoRead)setTimeout(()=>talk(contact.name+' dice: '+text),state.tg.chime?750:0);
   }
   function formatTime(ms){
     const d=new Date(ms),today=new Date();
@@ -751,7 +778,7 @@
     const p=tgReady()?state.tg.pending.find(x=>!dismissedJoin.has(x.chatId)):null;
     $('joinRequest').hidden=!p;if(!p)return;
     $('joinRequest').dataset.chatId=p.chatId;$('joinName').textContent=p.name;
-    if(!announcedJoin.has(p.chatId)){announcedJoin.add(p.chatId);if(state.tg.autoRead)talk(p.name+' quiere conversar con vos por Telegram.');}
+    if(!announcedJoin.has(p.chatId)){announcedJoin.add(p.chatId);chime();if(state.tg.autoRead)setTimeout(()=>talk(p.name+' quiere conversar con vos por Telegram.'),state.tg.chime?750:0);}
   }
   async function acceptJoin(){
     const p=state.tg.pending.find(x=>x.chatId===$('joinRequest').dataset.chatId);if(!p){renderJoinRequest();return;}
@@ -777,6 +804,7 @@
       ?'Compartí este enlace con la familia (por ejemplo por WhatsApp). Quien lo abra en su teléfono, con Telegram instalado, y toque <b>Iniciar</b> queda <b>conectado automáticamente</b>: no hay que aprobar nada.'
       :'Cada persona abre este enlace en su teléfono, con Telegram instalado, y toca <b>Iniciar</b>:';
     $('tgNewInvite').hidden=!isServer();
+    $('tgChime').checked=state.tg.chime;renderPushStatus();
     $('tgAutoRead').checked=state.tg.autoRead;
     const pend=$('tgPending');pend.replaceChildren();
     if(!state.tg.pending.length){const p=document.createElement('p');p.className='muted';p.textContent='No hay personas esperando. Cuando alguien toque «Iniciar», tocá «Buscar personas».';pend.append(p);}
@@ -896,6 +924,7 @@
     $(pinInput).value='';
     persist();setConn('connecting');renderTgDialog();renderChat();startPolling();requestPersist();
     notify('Conectado al servidor · bot @'+ok.status.bot.username+(ok.status.persistent?'':' (⚠️ el servidor no tiene almacenamiento permanente)'));
+    if(pushSupported()&&Notification.permission!=='denied')enablePush();
   }
   async function changeServerPin(){
     const ok=await checkServer(state.tg.server.url,$('srvNewPin').value,'srvPinError','srvPinSave');if(!ok)return;
@@ -912,9 +941,57 @@
       ?'¿Desconectar este dispositivo del servidor? Las personas y las conversaciones quedan guardadas en el servidor: para volver a conectar alcanza con la dirección y el PIN.'
       :'¿Desconectar Telegram? Se borran las conversaciones guardadas en Hablemos y las personas conectadas (los contactos con WhatsApp se mantienen).\n\nSi solo cambiaste el token con /revoke, no hace falta desconectar: usá «Cambiar el token».';
     if(!window.confirm(question))return;
+    if(state.tg.push)disablePush();
     stopPolling();unlinkAllTelegram();
     state.tg=tgInitial();persist();setConn('idle');renderTgDialog();renderSelectedContact();$('incoming').hidden=true;notify('Telegram desconectado');
   }
+  // ===== V0.9: avisos en el teléfono (push), aunque Hablemos esté cerrada =====
+  const pushSupported=()=>'serviceWorker' in navigator&&'PushManager' in window&&'Notification' in window&&isSecureContext;
+  const keyBytes=b64url=>{const pad='='.repeat((4-b64url.length%4)%4);return Uint8Array.from(atob((b64url+pad).replace(/-/g,'+').replace(/_/g,'/')),c=>c.charCodeAt(0));};
+  async function enablePush({quiet=false}={}){
+    const say=msg=>{if(!quiet)notify(msg);};
+    if(!isServer()){say('Los avisos necesitan el servidor de Hablemos.');return false;}
+    if(!pushSupported()){say('Este navegador no permite avisos. En Android usá Chrome.');renderPushStatus();return false;}
+    let permission=Notification.permission;
+    if(permission==='default'){if(quiet&&!state.tg.push)return false;permission=await Notification.requestPermission();}
+    if(permission!=='granted'){state.tg.push=false;persist();renderPushStatus();say('Los avisos quedaron bloqueados. Mirá cómo permitirlos en Configuración → Telegram.');return false;}
+    try{
+      const reg=await navigator.serviceWorker.ready;
+      const status=await srvCall('/api/status');
+      if(!status.pushKey){say('El servidor todavía no puede enviar avisos.');return false;}
+      let sub=await reg.pushManager.getSubscription();
+      // Si el servidor cambió su clave, hay que volver a suscribirse.
+      const current=sub&&sub.options&&sub.options.applicationServerKey?new Uint8Array(sub.options.applicationServerKey):null;
+      const wanted=keyBytes(status.pushKey);
+      if(sub&&current&&(current.length!==wanted.length||current.some((b,i)=>b!==wanted[i]))){await sub.unsubscribe();sub=null;}
+      if(!sub)sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:wanted});
+      await srvCall('/api/push/subscribe',{method:'POST',body:{subscription:sub.toJSON()}});
+      state.tg.push=true;persist();renderPushStatus();say('🔔 Avisos activados en este teléfono');
+      return true;
+    }catch(e){renderPushStatus();say(e.code?srvError(e):'No se pudieron activar los avisos en este navegador.');return false;}
+  }
+  async function disablePush(){
+    try{
+      const reg=await navigator.serviceWorker.getRegistration();const sub=reg&&await reg.pushManager.getSubscription();
+      if(sub){if(isServer())await srvCall('/api/push/unsubscribe',{method:'POST',body:{endpoint:sub.endpoint}}).catch(()=>{});await sub.unsubscribe();}
+    }catch(e){}
+    state.tg.push=false;persist();
+  }
+  function renderPushStatus(){
+    const el=$('pushStatus');if(!el)return;
+    let text,stateName,canEnable=true;
+    if(!isServer()){text='Los avisos con Hablemos cerrada necesitan el servidor de Hablemos.';stateName='idle';canEnable=false;}
+    else if(!pushSupported()){text='Este navegador no permite avisos. En Android, abrí Hablemos con Chrome (mejor instalada como app).';stateName='conflict';canEnable=false;}
+    else if(Notification.permission==='denied'){text='🔴 Los avisos están bloqueados. En el teléfono: Ajustes → Aplicaciones → Chrome (o Hablemos) → Notificaciones → Permitir. Después tocá «Activar avisos».';stateName='invalid';}
+    else if(Notification.permission==='granted'&&state.tg.push){text='🟢 Avisos activados: este teléfono avisa los mensajes nuevos aunque Hablemos esté cerrada.';stateName='ok';}
+    else{text='⚪ Avisos sin activar en este teléfono. Tocá «Activar avisos» y después «Permitir».';stateName='connecting';}
+    el.textContent=text;el.dataset.state=stateName;
+    $('pushEnable').hidden=!canEnable;$('pushTest').hidden=!(canEnable&&state.tg.push);
+    $('pushEnable').textContent=state.tg.push&&Notification.permission==='granted'?'🔔 Volver a activar':'🔔 Activar avisos';
+  }
+  let pushChecked=false;
+  function ensurePushOnce(){if(pushChecked||!isServer()||!state.tg.push)return;pushChecked=true;enablePush({quiet:true});}
+
   // ===== V0.5: datos permanentes y copia de seguridad cifrada =====
   // El token no puede ir dentro de la app publicada (el código es público). Para configurar una sola vez:
   // 1) se pide al navegador que no borre los datos; 2) una copia cifrada con clave permite restaurar todo en otro navegador o teléfono.
@@ -1130,6 +1207,14 @@
     catch(e){notify(srvError(e));}
   });
   $('tgAutoRead').addEventListener('change',e=>{state.tg.autoRead=e.target.checked;persist();});
+  $('tgChime').addEventListener('change',e=>{state.tg.chime=e.target.checked;persist();if(e.target.checked)chime();});
+  $('pushEnable').addEventListener('click',()=>enablePush());
+  $('pushTest').addEventListener('click',async()=>{
+    try{const r=await srvCall('/api/push/test',{method:'POST',body:{}});notify(r.sent?'Aviso enviado: mirá la barra de notificaciones del teléfono.':'No hay teléfonos con avisos activados.');}
+    catch(e){notify(srvError(e));}
+  });
+  // El service worker avisa que llegó un push: se consulta enseguida para mostrar el mensaje.
+  if('serviceWorker' in navigator)navigator.serviceWorker.addEventListener('message',e=>{if(e.data&&e.data.type==='hablemos-push'&&tgReady())kickPolling();});
   $('tgDisconnect').addEventListener('click',disconnectTelegram);
   $('incomingSay').addEventListener('click',()=>talk($('incomingText').textContent));
   // Responder: queda elegida esa persona para el próximo envío y vuelve el tablero para armar la respuesta.

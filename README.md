@@ -1,6 +1,15 @@
-# Hablemos V0.8 — Crear conversaciones sin escribir
+# Hablemos V0.9 — Crear conversaciones sin escribir
 
 **Prototipo accesible para Android**. Diseñado para una persona que comprende texto y puede pulsar botones grandes, pero no puede hablar y tiene dificultad para escribir.
+
+## Cambios de la versión 0.9: avisos de mensajes nuevos
+
+- **Avisos en el teléfono (push)** aunque Hablemos esté cerrada o el teléfono bloqueado, como los de WhatsApp: «📩 Mamá — Hola hijo». Suenan y vibran, y tocarlos abre Hablemos. También avisa cuando alguien sin invitación quiere conversar.
+  - Se activan una vez en cada teléfono: **⚙ (mantener apretado) → Telegram → 🔔 Activar avisos → Permitir**. Con «Probar un aviso» se comprueba que llegan.
+  - Si quedaron bloqueados: en el teléfono, **Ajustes → Aplicaciones → Chrome (o Hablemos) → Notificaciones → Permitir**, y volver a tocar «Activar avisos».
+  - Funcionan con el servidor de Hablemos. Los manda el servidor de Railway con la librería `web-push`, cifrados de punta a punta y firmados con claves propias (VAPID) que se guardan en el disco permanente.
+- **Con la app abierta:** al llegar un mensaje suena un timbre de dos notas, el teléfono vibra, aparece el recuadro y se lee en voz alta. El timbre se puede apagar en ⚙ → Telegram → Opciones.
+- Si Hablemos está instalada como app, el ícono muestra cuántos mensajes nuevos hay (en los teléfonos que lo permiten).
 
 ## Cambios de la versión 0.8: pantalla simple para manos con poca movilidad
 
@@ -156,8 +165,8 @@ Los datos (contactos, frases, palabras aprendidas) se guardan **solo en ese tel�
 
 ### Publicar una nueva versión
 
-1. Cambiar el nombre de la caché en `sw.js` (por ejemplo `hablemos-offline-v13` → `hablemos-offline-v14`), para actualizar la copia que se usa sin conexión.
-2. En `index.html`, cambiar la versión del script: `app.js?v=0.8` → `app.js?v=0.8.1`. **Si no se cambia, el navegador puede seguir usando el `app.js` anterior hasta 10 minutos.**
+1. Cambiar el nombre de la caché en `sw.js` (por ejemplo `hablemos-offline-v14` → `hablemos-offline-v15`), para actualizar la copia que se usa sin conexión.
+2. En `index.html`, cambiar la versión del script: `app.js?v=0.9` → `app.js?v=0.9.1`. **Si no se cambia, el navegador puede seguir usando el `app.js` anterior hasta 10 minutos.**
 3. Guardar los cambios con git y subirlos: `git commit -am "…"` y `git push`.
 4. En uno o dos minutos GitHub Pages publica la nueva versión. Con internet, la próxima vez que se abra Hablemos ya carga la nueva.
 
