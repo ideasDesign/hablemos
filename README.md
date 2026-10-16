@@ -1,6 +1,10 @@
-# Hablemos V2.2.1 — Crear conversaciones sin escribir
+# Hablemos V2.2.2 — Crear conversaciones sin escribir
 
 **Prototipo accesible para Android**. Diseñado para una persona que comprende texto y puede pulsar botones grandes, pero no puede hablar y tiene dificultad para escribir.
+
+## Cambios de la versión 2.2.2: voz natural también en iPad y iPhone
+
+- Safari no deja sonar audios que arrancan solos. Ahora hay un único reproductor que se desbloquea con el primer toque en la pantalla, así los mensajes que llegan se leen con la voz natural (antes caían en la voz del dispositivo).
 
 ## Cambios de la versión 2.2.1: voz natural para los mensajes de la familia
 
@@ -294,8 +298,8 @@ Los datos (contactos, frases, palabras aprendidas) se guardan **solo en ese tel�
 
 ### Publicar una nueva versión
 
-1. Cambiar el nombre de la caché en `sw.js` (por ejemplo `hablemos-offline-v30` → `hablemos-offline-v31`), para actualizar la copia que se usa sin conexión.
-2. En `index.html`, cambiar la versión del script: `app.js?v=2.2.1` → `app.js?v=2.2.2`. **Si no se cambia, el navegador puede seguir usando el `app.js` anterior hasta 10 minutos.**
+1. Cambiar el nombre de la caché en `sw.js` (por ejemplo `hablemos-offline-v31` → `hablemos-offline-v32`), para actualizar la copia que se usa sin conexión.
+2. En `index.html`, cambiar la versión del script: `app.js?v=2.2.2` → `app.js?v=2.2.3`. **Si no se cambia, el navegador puede seguir usando el `app.js` anterior hasta 10 minutos.**
 3. Guardar los cambios con git y subirlos: `git commit -am "…"` y `git push`.
 4. En uno o dos minutos GitHub Pages publica la nueva versión. Con internet, la próxima vez que se abra Hablemos ya carga la nueva.
 

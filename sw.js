@@ -1,4 +1,4 @@
-const CACHE='hablemos-offline-v30';
+const CACHE='hablemos-offline-v31';
 const FILES=['./','./index.html','./app.js','./icons.js','./manifest.webmanifest','./assets/icon-192.png','./assets/fondo.webp','./assets/icon-512.png'];
 self.addEventListener('install',event=>{
   event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(FILES)).then(()=>self.skipWaiting()));

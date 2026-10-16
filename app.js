@@ -642,6 +642,20 @@
   // who: 'diego' para lo que dice Diego; cualquier otro valor, para los mensajes de la familia y los avisos.
   // Cada frase se baja una sola vez y queda guardada en el teléfono. Si algo falla, se usa la voz del teléfono.
   let voiceAudio=null,talkSeq=0;const voiceUrls=new Map();
+  // iPhone y iPad no dejan sonar audios que arrancan solos (por ejemplo, al llegar un mensaje) si ese reproductor
+  // no sonó antes con un toque. Por eso hay un solo reproductor para todo, que se «desbloquea» con el primer toque.
+  const SILENT='data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=';
+  let sharedPlayer=null,audioUnlocked=false;
+  function player(){
+    if(!sharedPlayer){sharedPlayer=new Audio();sharedPlayer.preload='auto';sharedPlayer.setAttribute('playsinline','');}
+    return sharedPlayer;
+  }
+  function unlockAudio(){
+    if(audioUnlocked)return;audioUnlocked=true;
+    const a=player();if(a.src&&!a.paused)return; // ya está sonando algo: está desbloqueado
+    a.src=SILENT;a.play().then(()=>{if(a.src===SILENT)a.pause();}).catch(()=>{audioUnlocked=false;});
+  }
+  for(const type of ['pointerdown','touchend','keydown'])window.addEventListener(type,unlockAudio,{capture:true,passive:true});
   const cloudVoiceFor=w=>isServer()&&state.cloudVoice&&navigator.onLine&&!!(state.tg.voice&&state.tg.voice[w]);
   function stopTalking(){talkSeq++;if(voiceAudio){voiceAudio.pause();voiceAudio=null;}if(hasVoice())window.speechSynthesis.cancel();}
   function talk(phrase,who){
@@ -670,7 +684,7 @@
       if(voiceUrls.size>60){const [k,u]=voiceUrls.entries().next().value;URL.revokeObjectURL(u);voiceUrls.delete(k);}
     }
     if(my!==talkSeq)return; // mientras bajaba, se pidió decir otra cosa
-    const a=new Audio(url);a.volume=Math.max(.1,state.volume);voiceAudio=a;
+    const a=player();a.src=url;a.volume=Math.max(.1,state.volume);voiceAudio=a;
     await a.play();
   }
   function phoneTalk(m){
@@ -970,7 +984,7 @@
         url=URL.createObjectURL(await r.blob());audioUrls.set(m.id,url);
         if(audioUrls.size>15){const [k,u]=audioUrls.entries().next().value;URL.revokeObjectURL(u);audioUrls.delete(k);}
       }
-      const a=new Audio(url);a.volume=Math.max(.1,state.volume);playing=a;
+      const a=player();a.src=url;a.volume=Math.max(.1,state.volume);playing=a;
       await a.play();
       notify('🔊 Escuchando el audio de '+c.name);
     }catch(e){notify(e&&e.name==='NotAllowedError'?'Tocá «Escuchar» para oír el audio.':'No se pudo reproducir el audio. Probá de nuevo.');}
