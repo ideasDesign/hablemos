@@ -4,7 +4,7 @@
 
 ## Cambios de la versión 1.9: voz natural con ElevenLabs
 
-- Lo que dice Diego suena con una voz humana de ElevenLabs (por defecto «Diego – Casual & Friendly», acento argentino).
+- Lo que dice Diego suena con una voz humana de ElevenLabs (por defecto «Eric», incluida en el plan gratis; las voces de la biblioteca, como «Diego» con acento argentino, solo funcionan por API con plan pago o US$5 de créditos).
 - La clave va solo en Railway: variable `ELEVENLABS_API_KEY`. Opcionales: `ELEVENLABS_VOICE_DIEGO`, `ELEVENLABS_VOICE_FAMILY` (ID de otra voz para leer los mensajes de la familia; vacía = voz del teléfono), `ELEVENLABS_MODEL` (por defecto `eleven_flash_v2_5`, la mitad de créditos por carácter) y `ELEVENLABS_MAX_CHARS_HOUR` (tope por hora, 2500).
 - Cada frase se genera una sola vez: queda guardada en el servidor (`/data/voz`) y en el teléfono, así las frases repetidas no gastan créditos.
 - Sin internet, sin créditos o si la voz no está disponible, se usa sola la voz del teléfono. Se puede apagar en Configuración → Voz.
