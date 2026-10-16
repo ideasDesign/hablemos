@@ -16,6 +16,7 @@ const TOKEN = RAW_TOKEN.replace(/\s+/g, '').replace(/^["'`]+|["'`]+$/g, '').repl
 function tokenProblem() {
   if (!RAW_TOKEN.trim()) return 'TELEGRAM_TOKEN está vacío.';
   if (/^\d{6,15}:[\w-]{30,60}$/.test(TOKEN)) return '';
+  if (/^\d{6,15}:[\w-]{30,60}$/.test(PIN)) return 'Las variables están invertidas: el token quedó en HABLEMOS_PIN. Poné el token en TELEGRAM_TOKEN y el PIN en HABLEMOS_PIN.';
   if (!TOKEN.includes(':')) return 'TELEGRAM_TOKEN no tiene los dos puntos (:). Tiene que tener la forma 123456789:AAH… tal como lo da @BotFather.';
   return `TELEGRAM_TOKEN no tiene la forma 123456789:AAH… (tiene ${TOKEN.length} caracteres). Pegá solo el token, sin otras palabras del mensaje de @BotFather.`;
 }
