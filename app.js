@@ -407,7 +407,10 @@
         const shown=new Set();
         if(aiState&&aiState.status==='loading')items.push(tile('nav','Pensando respuestas…',()=>notify('Un momento: estoy pensando respuestas.'),'✨'));
         if(aiState&&aiState.status==='done')for(const r of aiState.replies){shown.add(normText(r));items.push(tile('reply',r,()=>chooseReply(r,c,intent),'✨'));}
-        for(const o of options){
+        // Cuando llegan las respuestas de la IA, las de reglas se ocultan: menos opciones, pantalla más clara.
+        // Siguen apareciendo mientras la IA piensa, si falla o si no hay internet.
+        const aiReady=aiState&&aiState.status==='done'&&aiState.replies.length>0;
+        for(const o of aiReady?[]:options){
           if(typeof o==='string'&&shown.has(normText(o)))continue;
           if(typeof o==='string')items.push(tile('reply',o,()=>chooseReply(o,c,intent)));
           else items.push(tile('folder',o.label,()=>go('reply:'+cid+':'+o.sub),o.icon||'📂'));
@@ -1244,7 +1247,33 @@
   $('speakBtn').addEventListener('click',()=>{if(!state.message.trim()){notify('Primero armá un mensaje.');return;}speakMessage();});
   $('sendBtn').addEventListener('click',openSendSheet);
   $('sheetCancel').addEventListener('click',()=>$('sendSheet').close());
-  $('helpBtn').addEventListener('click',()=>{const msg='Necesito ayuda ahora. Por favor, vení.';setMessage(msg);talk(msg);notify('Pedido de ayuda dicho en voz alta. No se envió a nadie.');});
+  // 🆘 Ayuda: se dice en voz alta enseguida y, si hay Telegram, pregunta si avisar a toda la familia.
+  let helpOpenedAt=0;
+  $('helpBtn').addEventListener('click',()=>{
+    const msg='Necesito ayuda ahora. Por favor, vení.';setMessage(msg);talk(msg);
+    if(tgContacts().length){helpOpenedAt=Date.now();$('helpCount').textContent=tgContacts().map(c=>c.name).join(', ');$('helpSheet').showModal();}
+    else notify('Pedido de ayuda dicho en voz alta. Para avisar por mensaje, conectá a la familia por Telegram.');
+  });
+  $('helpNo').addEventListener('click',()=>$('helpSheet').close());
+  $('helpYes').addEventListener('click',async()=>{
+    if(Date.now()-helpOpenedAt<600)return; // evita que un doble toque mande el aviso sin querer
+    $('helpSheet').close();
+    if(!navigator.onLine){notify('Sin internet: no se pudo avisar. Pedí ayuda en voz alta.');return;}
+    notify('Avisando a la familia…');
+    try{
+      let sent=0;
+      if(isServer()){const r=await srvCall('/api/help',{method:'POST',body:{}});sent=r.sent;}
+      else{
+        const text='🆘 Necesito ayuda ahora. Por favor, vení o llamame. (Aviso enviado desde Hablemos)';
+        for(const c of tgContacts()){try{await tgCall('sendMessage',{chat_id:c.telegramId,text});pushThread(c.telegramId,'out',text,Date.now());sent++;}catch(e){}}
+        persist();
+      }
+      const ok=sent>0;
+      notify(ok?'🆘 Aviso enviado a '+sent+(sent===1?' persona':' personas'):'No se pudo enviar el aviso. Pedí ayuda en voz alta.');
+      talk(ok?'Listo, avisé a tu familia.':'No pude avisar. Probá de nuevo.');
+      if(isServer())kickPolling();
+    }catch(e){notify('No se pudo enviar el aviso. Pedí ayuda en voz alta.');talk('No pude avisar. Probá de nuevo.');}
+  });
   // Configuración: se abre manteniendo apretado ⚙, para que no se abra por un toque sin querer.
   function openSettings(){renderVoiceSettings();renderBackupStatus();$('settingsDialog').showModal();}
   let gearTimer=null,gearOpenedAt=0;

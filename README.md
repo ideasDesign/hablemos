@@ -1,6 +1,13 @@
-# Hablemos V1.1 — Crear conversaciones sin escribir
+# Hablemos V1.2 — Crear conversaciones sin escribir
 
 **Prototipo accesible para Android**. Diseñado para una persona que comprende texto y puede pulsar botones grandes, pero no puede hablar y tiene dificultad para escribir.
+
+## Cambios de la versión 1.2: ayuda real y pantalla de respuestas más clara
+
+- **🆘 Necesito ayuda avisa a la familia.** Al tocarlo se dice en voz alta enseguida (como antes) y aparece «¿Aviso a tu familia por Telegram?», que muestra a quiénes les llega. Con **«🆘 Sí, avisar a todos»**, todas las personas conectadas reciben «🆘 Necesito ayuda ahora. Por favor, vení o llamame.» y la app confirma en voz alta «Listo, avisé a tu familia». Con **«No, solo decirlo»** no se manda nada.
+  - Un doble toque rápido no manda el aviso. Si se confirma dos veces seguidas, el servidor no lo repite antes de 20 segundos.
+  - Sin internet, la app avisa que no pudo enviarlo para que pida ayuda en voz alta. **No reemplaza a un servicio de emergencias.**
+- **Respuestas más claras:** cuando llegan las respuestas ✨ de la IA, se ocultan las de reglas. Siguen apareciendo mientras la IA piensa, si falla o si no hay internet.
 
 ## Cambios de la versión 1.1: respuestas sugeridas con inteligencia artificial (Claude)
 
@@ -219,8 +226,8 @@ Los datos (contactos, frases, palabras aprendidas) se guardan **solo en ese tel�
 
 ### Publicar una nueva versión
 
-1. Cambiar el nombre de la caché en `sw.js` (por ejemplo `hablemos-offline-v17` → `hablemos-offline-v18`), para actualizar la copia que se usa sin conexión.
-2. En `index.html`, cambiar la versión del script: `app.js?v=1.1` → `app.js?v=1.1.1`. **Si no se cambia, el navegador puede seguir usando el `app.js` anterior hasta 10 minutos.**
+1. Cambiar el nombre de la caché en `sw.js` (por ejemplo `hablemos-offline-v18` → `hablemos-offline-v19`), para actualizar la copia que se usa sin conexión.
+2. En `index.html`, cambiar la versión del script: `app.js?v=1.2` → `app.js?v=1.2.1`. **Si no se cambia, el navegador puede seguir usando el `app.js` anterior hasta 10 minutos.**
 3. Guardar los cambios con git y subirlos: `git commit -am "…"` y `git push`.
 4. En uno o dos minutos GitHub Pages publica la nueva versión. Con internet, la próxima vez que se abra Hablemos ya carga la nueva.
 
@@ -252,7 +259,7 @@ No hace falta backend, base de datos, cuenta, API ni servidor para almacenar dat
 - El área **Guardadas** contiene frases guardadas localmente, **no** un historial real de conversaciones de WhatsApp.
 - Borrar los datos del navegador o cambiar de dispositivo puede eliminar contactos, frases y preferencias: por eso conviene guardar una **copia de seguridad**. No usar como único método de comunicación o atención de emergencias.
 - La copia de seguridad incluye el token de Telegram cifrado con la clave elegida. Usar una clave difícil de adivinar y no guardarla junto al archivo.
-- **Necesito ayuda ahora** solo prepara una frase y la reproduce por voz; no llama, no contacta a nadie y no sustituye un sistema de aviso urgente.
+- **Necesito ayuda** dice el pedido en voz alta y, si se confirma, lo manda por Telegram a la familia conectada. No llama por teléfono ni sustituye un servicio de emergencias.
 - Si se guarda información sensible, otras personas con acceso al navegador/dispositivo podrían verla. Proteger el teléfono.
 
 ## Archivos del proyecto

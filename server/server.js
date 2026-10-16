@@ -106,6 +106,7 @@ Cómo tienen que ser las respuestas:
 - Si preguntan algo que solo "Yo" sabe (una hora, un lugar, una preferencia), ofrecé varias opciones posibles en vez de elegir una.
 - Naturales y cálidas, como hablaría una persona adulta con su familia. Sin emojis.
 - No respondas el mensaje vos: devolvé solamente las opciones.`;
+let lastHelpAt = 0, lastHelpSent = 0;
 const suggestCache = new Map(); // «chatId:seq» → respuestas (para no volver a pagar si se abre dos veces)
 const aiCalls = [];
 async function suggestReplies(chatId) {
@@ -388,6 +389,22 @@ const server = http.createServer(async (req, res) => {
         }
         const delivered = linkPerson(chatId, name, { welcome: !body.migrate });
         return send(res, 200, { ok: true, delivered }, cors);
+      }
+      if (url.pathname === '/api/help') {
+        // Pedido de ayuda: se manda a todas las personas conectadas (con un mínimo de 20 s entre avisos, por si se toca dos veces).
+        const now = Date.now();
+        if (now - lastHelpAt < 20000) return send(res, 200, { ok: true, sent: lastHelpSent, repeated: true }, cors);
+        lastHelpAt = now;
+        const text = '🆘 Necesito ayuda ahora. Por favor, vení o llamame. (Aviso enviado desde Hablemos)';
+        const linked = Object.values(db.people).filter(x => x.status === 'linked');
+        let sent = 0;
+        for (const p of linked) {
+          try { const r = await tg('sendMessage', { chat_id: p.chatId, text }); addMessage({ chatId: p.chatId, dir: 'out', text, date: Date.now(), id: r.message_id }); sent++; }
+          catch (e) { console.error('No se pudo enviar el pedido de ayuda a una persona:', e.code || e.message); }
+        }
+        lastHelpSent = sent;
+        console.log(`Pedido de ayuda enviado a ${sent} de ${linked.length} persona(s).`);
+        return send(res, 200, { ok: true, sent, total: linked.length }, cors);
       }
       if (url.pathname === '/api/suggest') {
         if (!ai) return send(res, 503, { error: 'ai-off' }, cors);

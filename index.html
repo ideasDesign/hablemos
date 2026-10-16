@@ -9,7 +9,7 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Hablemos">
-  <title>Hablemos 1.1 · Conversaciones sin escribir</title>
+  <title>Hablemos 1.2 · Conversaciones sin escribir</title>
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./assets/icon-192.png" type="image/png">
   <style>
@@ -222,6 +222,8 @@
     .tile.person.preferred{border-width:4px;box-shadow:0 0 0 3px #1f78b855}
     .tile.person .badge{background:#177d46}
     .wide-act{width:100%}
+    .act.help-yes{background:#b3261e;color:#fff;min-height:110px}
+    .sheet-people .act{min-height:110px}
     .settings-buttons{display:grid;gap:8px}
     .toast{top:calc(74px + env(safe-area-inset-top));bottom:auto;pointer-events:none}
     body.hold-on .app button,body.hold-on dialog[data-board] button{position:relative;overflow:hidden;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
@@ -415,6 +417,16 @@
       <button type="button" class="formbtn" data-close="settingsDialog">Listo</button>
     </div>
   </dialog>
+  <dialog id="helpSheet" class="sheet" data-board aria-labelledby="helpTitle">
+    <div class="modalbody sheet-body">
+      <h2 id="helpTitle">🆘 ¿Aviso a tu familia por Telegram?</h2>
+      <p class="send-preview">«Necesito ayuda ahora. Por favor, vení o llamame.»<br><small>Le llega a: <span id="helpCount"></span></small></p>
+      <div class="sheet-people">
+        <button id="helpYes" type="button" class="act help-yes">🆘<span>Sí, avisar a todos</span></button>
+        <button id="helpNo" type="button" class="act cancel">✕<span>No, solo decirlo</span></button>
+      </div>
+    </div>
+  </dialog>
   <dialog id="sendSheet" class="sheet" data-board aria-labelledby="sheetTitle">
     <div class="modalbody sheet-body">
       <h2 id="sheetTitle">¿A quién se lo mando?</h2>
@@ -550,6 +562,6 @@
     </div>
   </dialog>
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
-  <script src="./app.js?v=1.1" defer></script>
+  <script src="./app.js?v=1.2" defer></script>
 </body>
 </html>
