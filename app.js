@@ -101,7 +101,7 @@
   const repeatOptions=[0,500,1000,2000];
   const initial = {contacts:[],selectedContactId:null,ownPhrases:[],message:'',category:'frecuentes',combine:false,large:false,contrast:false,
     tokens:[],punctuation:'.',buildCategory:'inicio',savedMessages:[],customBlocks:[],mode:'build',
-    suggest:true,learned:{},voiceURI:'',rate:.9,pitch:1,volume:1,holdMs:0,repeatMs:0,lastBackup:0};
+    suggest:true,learned:{},replyLearned:{},voiceURI:'',rate:.9,pitch:1,volume:1,holdMs:0,repeatMs:0,lastBackup:0};
   const clampNumber=(value,min,max,fallback)=>typeof value==='number'&&isFinite(value)?Math.min(max,Math.max(min,value)):fallback;
   // V0.4: Telegram. threads = {chatId: [{dir:'in'|'out', text, date}]}; pending = personas que tocaron «Iniciar» y aún no están vinculadas.
   // V0.6: server = {url, pin} cuando Hablemos se conecta a su propio servidor (el token queda en el servidor). seq/pv = hasta dónde se sincronizó.
@@ -109,7 +109,7 @@
   const DEFAULT_SERVER_URL='https://hablemos-production.up.railway.app';
   const serverUrlOk=v=>typeof v==='string'&&/^https?:\/\/[^\s/]+(:\d+)?\/?$/.test(v);
   const chatIdOk=v=>typeof v==='string'&&/^-?\d{1,20}$/.test(v);
-  let state = {...initial,learned:{},tg:tgInitial()};
+  let state = {...initial,learned:{},replyLearned:{},tg:tgInitial()};
   function loadStored(key) {
     try {
       const value = JSON.parse(localStorage.getItem(key));
@@ -119,7 +119,7 @@
   const STORE_KEY='hablemos.v3';
   // Lee y valida los datos guardados. Se usa al abrir y cuando otra pestaña de Hablemos guarda cambios.
   function applyStored(stored){
-    state={...initial,learned:{},tg:tgInitial()};
+    state={...initial,learned:{},replyLearned:{},tg:tgInitial()};
     if(!stored)return;
     if(Array.isArray(stored.contacts)) state.contacts=stored.contacts.filter(x=>x&&typeof x.name==='string'&&typeof x.phone==='string'&&typeof x.id==='string').slice(0,50).map(x=>({id:x.id,name:x.name.slice(0,36),phone:x.phone.replace(/\D/g,''),...(chatIdOk(x.telegramId)?{telegramId:x.telegramId}:{})}));
     const tg=stored.tg;
@@ -156,6 +156,13 @@
     if(Array.isArray(stored.savedMessages))state.savedMessages=stored.savedMessages.filter(x=>typeof x==='string'&&x.trim()&&x.length<=1000).slice(0,60);
     if(['build','quick','saved'].includes(stored.mode))state.mode=stored.mode;
     if(typeof stored.suggest==='boolean')state.suggest=stored.suggest;
+    if(stored.replyLearned&&typeof stored.replyLearned==='object'&&!Array.isArray(stored.replyLearned)){
+      for(const [intent,counts] of Object.entries(stored.replyLearned).slice(0,40)){
+        if(!/^[a-z-]{2,20}$/.test(intent)||!counts||typeof counts!=='object')continue;
+        const clean={};for(const [r,n] of Object.entries(counts).slice(0,30))if(r.length<=120&&Number.isInteger(n)&&n>0)clean[r]=Math.min(n,999);
+        state.replyLearned[intent]=clean;
+      }
+    }
     if(stored.learned&&typeof stored.learned==='object'&&!Array.isArray(stored.learned)){
       const learned={};
       for(const [prev,nexts] of Object.entries(stored.learned).slice(0,400)){
@@ -224,6 +231,68 @@
     for(const word of learned)if(!used.has(word)&&result.length<Math.min(4,limit))result.push({word,learned:true});
     for(const word of base)if(!used.has(word)&&!result.some(x=>x.word===word)&&result.length<limit)result.push({word,learned:false});
     return result;
+  }
+  // ===== V1.0: respuestas sugeridas según el mensaje que llegó =====
+  // Reconoce el tipo de mensaje (hora, cuándo, cómo estás, visita, comida…) y ofrece respuestas listas para tocar.
+  // Funciona sin internet. Las respuestas que Diego elige más seguido aparecen primero.
+  const normText=t=>String(t||'').toLocaleLowerCase('es').normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[¡!¿.,;:()"“”«»]/g,' ').replace(/\s+/g,' ').trim();
+  const replySubs={
+    'hora-manana':['A las 8 de la mañana','A las 9 de la mañana','A las 10 de la mañana','A las 11 de la mañana','A las 12 del mediodía'],
+    'hora-noche':['A las 7 de la tarde','A las 8 de la noche','A las 9 de la noche','A las 10 de la noche']
+  };
+  const replyIntents=[
+    ['hora',/\b(a que hora|que hora|horario|a que hs)\b/,['A las 3 de la tarde','A las 4 de la tarde','A las 5 de la tarde','A las 6 de la tarde','Hoy no','Mañana',{label:'A la mañana…',sub:'hora-manana',icon:'🌅'},{label:'A la noche…',sub:'hora-noche',icon:'🌙'},'No sé, después te digo']],
+    ['cuando',/\b(cuando|que dia|que fecha|para cuando)\b/,['Hoy','Mañana','Pasado mañana','Esta tarde','Esta noche','El fin de semana','La semana que viene','No sé, después te digo']],
+    ['dormir',/\b(dormiste|descansaste|dormis|dormir|sueno)\b/,['Sí, dormí bien','Más o menos','Dormí mal','Tengo sueño','Me desperté varias veces']],
+    ['estado',/\b(como (estas|andas|te sentis|te sientes|amaneciste|dormiste|te fue|va|anda|seguis|estuvo|te encontras)|todo bien|que tal)\b/,['Bien, ¿y vos?','Muy bien','Más o menos','Cansado','Me duele algo','Mal, necesito ayuda']],
+    ['dolor',/\b(duele|dolor|molest)/,['Sí, me duele','No, estoy bien','Un poco','Mucho, necesito ayuda']],
+    ['medicacion',/\b(remedio|pastilla|medicacion|medicamento)/,['Sí, ya la tomé','Todavía no','¿Me ayudás a tomarla?','Me la olvidé']],
+    ['donde',/\b(donde|adonde)\b/,['En casa','En mi cuarto','En el living','En el médico','Afuera','No sé']],
+    ['quien',/\b(quien|quienes)\b/,['Mamá','Papá','Mi hermana','Mi hermano','Un amigo','No sé']],
+    ['cantidad',/\b(cuant[oa]s?)\b/,['Uno','Dos','Tres','Pocos','Muchos','No sé']],
+    ['comer',/\b(comer|comiste|almorzar|almorzaste|cenar|cenaste|desayun|merend|hambre|comida)/,['Sí, tengo hambre','No, gracias','Algo liviano','Ya comí','Después']],
+    ['tomar',/\b(tomar|tomaste|sed|agua|cafe|mate|jugo)\b/,['Agua, por favor','Un café','Un mate','No, gracias','Después']],
+    ['visita',/\b(voy|vamos|paso|vengo|venir|visit|ir a verte|ir a tu casa|nos vemos)/,['¡Sí, vení!','Te espero','Hoy no puedo','Mejor mañana','Avisame antes de venir','¡Qué alegría!']],
+    ['llamar',/\b(llamo|llamar|llamada|videollamada)/,['Sí, llamame','Ahora no puedo','Más tarde','Mejor por mensaje']],
+    ['salud',/\b(medico|medica|turno|doctor|doctora|consulta|kinesio|terapia|hospital|clinica|estudios?)\b/,['Sí, me acuerdo','¿A qué hora es?','¿Me acompañás?','No quiero ir','Gracias por avisarme']],
+    ['querer',/\b(queres|quieres|necesitas|te gustaria|preferis|te parece|tenes ganas)\b/,['Sí','No','Sí, por favor','No, gracias','Tal vez','Después']],
+    ['saludo',/^(hola|buen dia|buenos dias|buenas tardes|buenas noches|buenas)\b/,['¡Hola! ¿Cómo estás?','Hola, todo bien','Hola, te extraño','Hola, ¿venís hoy?']],
+    ['gracias',/\bgracias\b/,['De nada','Con gusto','Gracias a vos']],
+    ['carino',/\b(te quiero|te amo|te extrano|beso|abrazo)/,['Yo también te quiero','Te extraño mucho','Un beso grande','Un abrazo fuerte']],
+    ['despedida',/\b(chau|hasta (luego|manana|pronto)|nos hablamos)\b/,['Chau, un beso','Hasta mañana','Que descanses']]
+  ];
+  const yesNoStart=/^(estas|esta|tenes|tiene|podes|puede|puedo|hay|es|vas|venis|fuiste|hiciste|sabes|te acordas|dormiste|comiste)\b/;
+  function replyOptions(text){
+    const n=normText(text);
+    const question=/\?/.test(text)||yesNoStart.test(n);
+    const matched=replyIntents.filter(([,re])=>re.test(n));
+    let intent=matched.length?matched[0][0]:question?'si-no':n?'info':'inicio';
+    const out=[];const seen=new Set();
+    const add=o=>{const k=typeof o==='string'?o:o.label;if(!seen.has(k)&&out.length<12){seen.add(k);out.push(o);}};
+    // Primero, las que Diego ya eligió para este tipo de mensaje.
+    Object.entries(state.replyLearned[intent]||{}).sort((a,b)=>b[1]-a[1]).slice(0,3).forEach(([r])=>add(r));
+    // Solo el tipo principal: mezclar tipos confunde (por ejemplo «tomar la pastilla» no es «tomar agua»).
+    if(matched.length)matched[0][2].forEach(add);
+    if(intent==='si-no')['Sí','No','Tal vez','No sé'].forEach(add);
+    if(intent==='info')['¡Qué bueno!','Ok, gracias','Entendido','¡Qué lindo!','Qué pena','Contame más'].forEach(add);
+    if(intent==='inicio')['¡Hola! ¿Cómo estás?','Te extraño','¿Venís hoy?','Llamame, por favor'].forEach(add);
+    // Si hacen falta, se completan hasta 6 con respuestas generales.
+    for(const o of question?['Sí','No','No sé','Después te digo']:['Ok','Gracias','Después te digo'])if(out.length<6)add(o);
+    return {intent,options:out};
+  }
+  function learnReply(intent,text){
+    const counts=state.replyLearned[intent]||(state.replyLearned[intent]={});
+    if(!(text in counts)&&Object.keys(counts).length>=30)delete counts[Object.entries(counts).sort((a,b)=>a[1]-b[1])[0][0]];
+    counts[text]=Math.min((counts[text]||0)+1,999);
+  }
+  const lastIncoming=c=>(state.tg.threads[c.telegramId]||[]).filter(m=>m.dir==='in').at(-1)||null;
+  function openReply(c){state.selectedContactId=c.id;markRead(c);persist();view='reply:'+c.id;page=0;renderScreen();}
+  // Elegir una respuesta abre «¿A quién se lo mando?» con esa persona primero: responder son dos toques.
+  function chooseReply(text,c,intent){
+    learnReply(intent,text);
+    state.selectedContactId=c.id;view='main';page=0;
+    setMessage(text);
+    openSendSheet();
   }
   // Aprende el orden de las palabras solo cuando el mensaje se usa (hablar, enviar o guardar).
   let lastLearned='';
@@ -307,6 +376,23 @@
       return items;
     }
     if(view==='saved')return [backTo('folders'),...state.savedMessages.map(m=>tile('phrase',m,()=>selectPhrase(m),'💾'))];
+    if(view.startsWith('reply:')){
+      const [,cid,sub]=view.split(':');
+      const c=state.contacts.find(x=>x.id===cid&&x.telegramId);
+      if(!c){view='main';return boardItems();}
+      const last=lastIncoming(c);
+      const {intent,options}=replyOptions(last?last.text:'');
+      const items=[tile('quote',last?c.name+': «'+last.text+'»':'Escribile a '+c.name,()=>{if(last)talk(c.name+' dice: '+last.text);},'🔊'),backTo(sub?'reply:'+cid:'main')];
+      if(sub&&replySubs[sub])for(const r of replySubs[sub])items.push(tile('reply',r,()=>chooseReply(r,c,intent)));
+      else{
+        for(const o of options){
+          if(typeof o==='string')items.push(tile('reply',o,()=>chooseReply(o,c,intent)));
+          else items.push(tile('folder',o.label,()=>go('reply:'+cid+':'+o.sub),o.icon||'📂'));
+        }
+        items.push(tile('folder','Otra respuesta',()=>{state.selectedContactId=c.id;persist();go('main');notify('Armá tu respuesta para '+c.name);},'✍'));
+      }
+      return items;
+    }
     if(view==='people')return [backTo('main'),...tgContacts().map(c=>{const n=unreadCount(c);return tile('folder',c.name,()=>openChat(c),'👤',n?n+(n===1?' nuevo':' nuevos'):'');})];
     view='main';return boardItems();
   }
@@ -317,7 +403,7 @@
     if(t.icon){const i=document.createElement('span');i.className='ico';i.setAttribute('aria-hidden','true');i.textContent=t.icon;b.append(i);}
     const l=document.createElement('span');l.className='lbl';l.textContent=t.label;b.append(l);
     if(t.extra){const x=document.createElement('span');x.className='badge';x.textContent=t.extra;b.append(x);}
-    b.setAttribute('aria-label',(t.kind==='word'||t.kind==='learned'?'Agregar: ':'')+t.label+(t.extra?', '+t.extra:''));
+    b.setAttribute('aria-label',(t.kind==='word'||t.kind==='learned'?'Agregar: ':t.kind==='reply'?'Responder: ':t.kind==='quote'?'Escuchar: ':'')+t.label+(t.extra?', '+t.extra:''));
     b.addEventListener('click',t.onTap);
     return b;
   }
@@ -329,20 +415,22 @@
     const cols=boardCols();
     const gap=8,rows=Math.max(2,Math.floor((root.clientHeight+gap)/(tileHeight()+gap)));
     const cap=cols*rows;
+    // Lo que va fijo arriba en cada página: el mensaje citado (una fila entera) y «Volver».
+    let lead=0;while(lead<items.length&&(items[lead].kind==='quote'||items[lead].kind==='back'))lead++;
+    const pinned=items.slice(0,lead),rest=items.slice(lead);
+    const pinnedSlots=pinned.reduce((n,t)=>n+(t.kind==='quote'?cols:1),0);
     let pages=[items];
-    if(items.length>cap){
-      // Se pasa de página con un botón grande «Más», siempre en el mismo lugar. «Volver» queda fijo en cada página.
-      const pinned=items[0].kind==='back'?items[0]:null;
-      const rest=pinned?items.slice(1):items;
-      const per=cap-(pinned?2:1);
-      pages=[];for(let i=0;i<rest.length;i+=per)pages.push(rest.slice(i,i+per));
-      pages=pages.map(p=>pinned?[pinned,...p]:p);
+    if(pinnedSlots+rest.length>cap){
+      // Se pasa de página con un botón grande «Más», siempre en el mismo lugar.
+      const per=Math.max(1,cap-pinnedSlots-1);
+      pages=[];for(let i=0;i<rest.length;i+=per)pages.push([...pinned,...rest.slice(i,i+per)]);
     }
     page=page%pages.length;
     const shown=pages[page].slice();
     if(pages.length>1)shown.push(tile('nav','Más ('+(page+1)+' de '+pages.length+')',()=>{page=(page+1)%pages.length;renderBoard();},'▶'));
     // Con pocos botones, cada uno crece para aprovechar el espacio (más fácil de tocar), hasta un tope.
-    const used=Math.max(1,Math.ceil(shown.length/cols));
+    const quoteRows=shown.filter(t=>t.kind==='quote').length;
+    const used=Math.max(1,quoteRows+Math.ceil((shown.length-quoteRows)/cols));
     const rowH=Math.min(Math.round(tileHeight()*1.9),Math.floor((root.clientHeight-gap*(used-1))/used));
     root.style.gridTemplateColumns='repeat('+cols+',minmax(0,1fr))';
     root.style.gridTemplateRows='repeat('+used+','+Math.max(tileHeight(),rowH)+'px)';
@@ -368,7 +456,7 @@
       thread.append(row);
     }
     const actions=document.createElement('div');actions.className='chat-actions';
-    actions.append(makeTile(tile('back','Volver',()=>go('main'),'◀')),makeTile(tile('folder','Responder',()=>{state.selectedContactId=c.id;persist();go('main');notify('Armá tu respuesta para '+c.name);},'✍')));
+    actions.append(makeTile(tile('back','Volver',()=>go('main'),'◀')),makeTile(tile('folder','Responder',()=>openReply(c),'✍')));
     root.append(title,thread,actions);
     thread.scrollTop=thread.scrollHeight;
     markRead(c);
@@ -1217,13 +1305,12 @@
   if('serviceWorker' in navigator)navigator.serviceWorker.addEventListener('message',e=>{if(e.data&&e.data.type==='hablemos-push'&&tgReady())kickPolling();});
   $('tgDisconnect').addEventListener('click',disconnectTelegram);
   $('incomingSay').addEventListener('click',()=>talk($('incomingText').textContent));
-  // Responder: queda elegida esa persona para el próximo envío y vuelve el tablero para armar la respuesta.
+  // Responder: muestra respuestas listas para lo que preguntaron (o el tablero, si no es una persona de Telegram).
   $('incomingReply').addEventListener('click',()=>{
     const c=state.contacts.find(x=>x.id===incomingContactId);
     $('incoming').hidden=true;
-    if(c){state.selectedContactId=c.id;markRead(c);persist();}
+    if(c&&c.telegramId){openReply(c);return;}
     view='main';page=0;renderScreen();
-    if(c)notify('Armá tu respuesta para '+c.name);
   });
   $('incomingClose').addEventListener('click',()=>{$('incoming').hidden=true;});
   $('tgReplace').addEventListener('click',replaceToken);

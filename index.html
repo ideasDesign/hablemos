@@ -9,7 +9,7 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Hablemos">
-  <title>Hablemos 0.9.1 · Conversaciones sin escribir</title>
+  <title>Hablemos 1.0 · Conversaciones sin escribir</title>
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./assets/icon-192.png" type="image/png">
   <style>
@@ -194,6 +194,9 @@
     .tile.learned .lbl::before{content:'★ ';color:#a86a0c}
     .tile.phrase{background:#f4faf9;font-size:1.1rem;font-weight:800}
     .tile.folder{background:#dcebee;border-color:#6f9aa2;color:var(--primary)}
+    .tile.reply{background:#eef8f1;border-color:#5aa877;color:#173f28}
+    .tile.quote{grid-column:1/-1;flex-direction:row;justify-content:flex-start;text-align:left;gap:12px;background:#e6f2fb;border-color:#1f78b8;color:#0f3550;font-size:1.12rem;font-weight:800;padding:8px 14px}
+    .tile.quote .ico{font-size:1.8rem}
     .tile.back,.tile.nav{background:#eef0f0;border:3px dashed #8aa3a7;color:#2f4b52}
     .board.is-chat{display:flex;flex-direction:column;gap:8px}
     .chat-title{margin:0;font-size:1.25rem}
@@ -543,6 +546,6 @@
     </div>
   </dialog>
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
-  <script src="./app.js?v=0.9.1" defer></script>
+  <script src="./app.js?v=1.0" defer></script>
 </body>
 </html>

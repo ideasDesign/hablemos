@@ -1,6 +1,27 @@
-# Hablemos V0.9 — Crear conversaciones sin escribir
+# Hablemos V1.0 — Crear conversaciones sin escribir
 
 **Prototipo accesible para Android**. Diseñado para una persona que comprende texto y puede pulsar botones grandes, pero no puede hablar y tiene dificultad para escribir.
+
+## Cambios de la versión 1.0: respuestas sugeridas
+
+Cuando llega un mensaje y Diego toca **Responder**, en el aviso o en la conversación, el tablero muestra arriba el mensaje recibido (tocarlo lo vuelve a leer) y debajo **respuestas listas según lo que preguntaron**:
+
+| Si el mensaje dice… | Hablemos ofrece… |
+|---|---|
+| «¿A qué hora tenés médico?» | A las 3, 4, 5 o 6 de la tarde · Hoy no · Mañana · A la mañana… · A la noche… |
+| «¿Cuándo…?» | Hoy · Mañana · Pasado mañana · Esta tarde · El fin de semana… |
+| «¿Cómo estás?» | Bien, ¿y vos? · Muy bien · Más o menos · Cansado · Me duele algo… |
+| «¿Dormiste bien?» | Sí, dormí bien · Más o menos · Dormí mal · Tengo sueño… |
+| «Mañana paso a verte» | ¡Sí, vení! · Te espero · Hoy no puedo · Mejor mañana… |
+| «¿Tomaste la pastilla?» | Sí, ya la tomé · Todavía no · ¿Me ayudás a tomarla?… |
+| «¿Te duele algo?» | Sí, me duele · No, estoy bien · Un poco · Mucho, necesito ayuda |
+| «¿Querés…?» / «¿Te parece…?» | Sí · No · Sí, por favor · No, gracias · Tal vez · Después |
+| Saludos, «te quiero», «gracias», noticias | Respuestas que corresponden a cada uno |
+
+- Elegir una respuesta abre «¿A quién se lo mando?» con esa persona primero: **responder son dos toques**.
+- **Aprende:** las respuestas que Diego elige para cada tipo de pregunta aparecen primero la próxima vez.
+- Siempre está **✍ Otra respuesta** para armarla con el tablero.
+- Funciona sin internet y es instantánea: reconoce el tipo de mensaje con reglas, sin inteligencia artificial.
 
 ## Cambios de la versión 0.9: avisos de mensajes nuevos
 
@@ -165,8 +186,8 @@ Los datos (contactos, frases, palabras aprendidas) se guardan **solo en ese tel�
 
 ### Publicar una nueva versión
 
-1. Cambiar el nombre de la caché en `sw.js` (por ejemplo `hablemos-offline-v14` → `hablemos-offline-v15`), para actualizar la copia que se usa sin conexión.
-2. En `index.html`, cambiar la versión del script: `app.js?v=0.9` → `app.js?v=0.9.1`. **Si no se cambia, el navegador puede seguir usando el `app.js` anterior hasta 10 minutos.**
+1. Cambiar el nombre de la caché en `sw.js` (por ejemplo `hablemos-offline-v16` → `hablemos-offline-v17`), para actualizar la copia que se usa sin conexión.
+2. En `index.html`, cambiar la versión del script: `app.js?v=1.0` → `app.js?v=1.0.1`. **Si no se cambia, el navegador puede seguir usando el `app.js` anterior hasta 10 minutos.**
 3. Guardar los cambios con git y subirlos: `git commit -am "…"` y `git push`.
 4. En uno o dos minutos GitHub Pages publica la nueva versión. Con internet, la próxima vez que se abra Hablemos ya carga la nueva.
 
