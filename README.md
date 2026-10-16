@@ -1,6 +1,25 @@
-# Hablemos V0.4.2 — Crear conversaciones sin escribir
+# Hablemos V0.5 — Crear conversaciones sin escribir
 
 **Prototipo accesible para Android**. Diseñado para una persona que comprende texto y puede pulsar botones grandes, pero no puede hablar y tiene dificultad para escribir.
+
+## Cambios de la versión 0.5: configurar una vez y no perder nada
+
+- **Copia de seguridad cifrada** (Configuración → Copia de seguridad): guarda en un archivo todo lo de Hablemos, incluido Telegram con su token y las personas conectadas. El archivo queda protegido con una clave (cifrado AES-GCM; la clave nunca se guarda). Con **Restaurar copia** se recupera todo en otro navegador, otro teléfono o después de borrar los datos, y Telegram queda conectado enseguida.
+- Al conectar Telegram, Hablemos recuerda guardar la copia.
+- Hablemos pide al navegador **guardar los datos de forma permanente**, para que no los borre por falta de espacio, y muestra si lo logró.
+- Explica qué ajuste de Chrome borra los datos al cerrarlo.
+
+### ¿Por qué el token no viene incluido en la app?
+
+El código de Hablemos está publicado en GitHub y cualquiera puede leerlo. Si el token estuviera escrito ahí, cualquier persona podría manejar el bot de Diego, leer los mensajes de la familia y escribirles haciéndose pasar por él. Por eso el token se guarda solo en el dispositivo y en la copia cifrada.
+
+### Para que la configuración dure
+
+1. Instalar Hablemos como app (Chrome → ⋮ → **Instalar aplicación**). Las apps instaladas conservan mejor sus datos.
+2. No usar ventanas de incógnito.
+3. En Chrome, **Configuración → Privacidad y seguridad → Cookies de terceros**: dejar **desactivado** «Borrar cookies y datos de sitios al cerrar todas las ventanas».
+4. Después de conectar Telegram y a las personas, **guardar una copia de seguridad** y ponerla en un lugar seguro (Google Drive, un mensaje a uno mismo), con la clave anotada aparte.
+5. En otro navegador o teléfono: **Configuración → Restaurar copia**, elegir el archivo y escribir la clave. Usar Telegram en un solo dispositivo a la vez.
 
 ## Cambios de la versión 0.4.2: voz más natural
 
@@ -91,8 +110,8 @@ Los datos (contactos, frases, palabras aprendidas) se guardan **solo en ese tel�
 
 ### Publicar una nueva versión
 
-1. Cambiar el nombre de la caché en `sw.js` (por ejemplo `hablemos-offline-v7` → `hablemos-offline-v8`), para actualizar la copia que se usa sin conexión.
-2. En `index.html`, cambiar la versión del script: `app.js?v=0.4.2` → `app.js?v=0.4.3`. **Si no se cambia, el navegador puede seguir usando el `app.js` anterior hasta 10 minutos.**
+1. Cambiar el nombre de la caché en `sw.js` (por ejemplo `hablemos-offline-v8` → `hablemos-offline-v9`), para actualizar la copia que se usa sin conexión.
+2. En `index.html`, cambiar la versión del script: `app.js?v=0.5` → `app.js?v=0.5.1`. **Si no se cambia, el navegador puede seguir usando el `app.js` anterior hasta 10 minutos.**
 3. Guardar los cambios con git y subirlos: `git commit -am "…"` y `git push`.
 4. En uno o dos minutos GitHub Pages publica la nueva versión. Con internet, la próxima vez que se abra Hablemos ya carga la nueva.
 
@@ -122,7 +141,8 @@ No hace falta backend, base de datos, cuenta, API ni servidor para almacenar dat
 - Con Telegram, los mensajes enviados y recibidos pasan por los servidores de Telegram mediante el bot propio; Hablemos guarda una copia de las conversaciones solo en el teléfono.
 - **No recibe, consulta ni lee los mensajes de WhatsApp. No envía mensajes automáticamente.**
 - El área **Guardadas** contiene frases guardadas localmente, **no** un historial real de conversaciones de WhatsApp.
-- Borrar los datos del navegador o cambiar de dispositivo puede eliminar contactos, frases y preferencias. No usar como único método de comunicación o atención de emergencias.
+- Borrar los datos del navegador o cambiar de dispositivo puede eliminar contactos, frases y preferencias: por eso conviene guardar una **copia de seguridad**. No usar como único método de comunicación o atención de emergencias.
+- La copia de seguridad incluye el token de Telegram cifrado con la clave elegida. Usar una clave difícil de adivinar y no guardarla junto al archivo.
 - **Necesito ayuda ahora** solo prepara una frase y la reproduce por voz; no llama, no contacta a nadie y no sustituye un sistema de aviso urgente.
 - Si se guarda información sensible, otras personas con acceso al navegador/dispositivo podrían verla. Proteger el teléfono.
 

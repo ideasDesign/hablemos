@@ -9,7 +9,7 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Hablemos">
-  <title>Hablemos 0.4.2 · Conversaciones sin escribir</title>
+  <title>Hablemos 0.5 · Conversaciones sin escribir</title>
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./assets/icon-192.png" type="image/png">
   <style>
@@ -374,6 +374,16 @@
       <p id="tgStatus" class="formhint"></p>
       <button id="tgOpen" type="button" class="clear wide">✈ Configurar Telegram</button>
 
+      <h3 class="settings-group">Copia de seguridad</h3>
+      <p class="formhint">Guarda todo (contactos, frases, palabras aprendidas, voz y Telegram con su token) en un archivo protegido con clave. Con ese archivo se restaura en otro navegador, otro teléfono o si se borran los datos.</p>
+      <p id="storageStatus" class="formhint"></p>
+      <p id="backupLast" class="formhint"></p>
+      <div class="actiongrid">
+        <button id="backupOpen" type="button" class="clear">💾 Guardar copia</button>
+        <button id="restoreOpen" type="button" class="clear">📂 Restaurar copia</button>
+      </div>
+      <p class="formhint">Si los datos se borran cada vez que se cierra Chrome, revisá en Chrome: <b>Configuración → Privacidad y seguridad → Cookies de terceros</b>, y que esté <b>desactivado</b> «Borrar cookies y datos de sitios al cerrar todas las ventanas». Tampoco usar ventanas de incógnito.</p>
+
       <h3 class="settings-group">Protección de toques</h3>
       <label class="field" for="holdSelect">Mantener presionado para elegir</label>
       <select id="holdSelect" class="forminput">
@@ -431,6 +441,10 @@
       </div>
       <div id="tgStepPeople" hidden>
         <p class="tg-ok">✅ Bot: <b id="tgBotName"></b></p>
+        <div id="tgBackupHint" class="voice-help" hidden>
+          📌 <b>Guardá una copia de seguridad</b> para no tener que volver a configurar Telegram si cambiás de navegador o de teléfono, o si se borran los datos.
+          <button id="tgBackupBtn" type="button" class="clear wide" style="margin-top:10px">💾 Guardar copia de seguridad</button>
+        </div>
         <p id="tgConnStatus" class="conn-status" role="status" hidden></p>
         <details id="tgReplaceBox" class="tg-replace">
           <summary>Cambiar el token del bot</summary>
@@ -460,7 +474,38 @@
       </div>
     </div>
   </dialog>
+  <dialog id="backupDialog" aria-labelledby="backupTitle">
+    <div class="modalhead"><h2 id="backupTitle">💾 Copia de seguridad</h2><button type="button" class="modalclose" data-close="backupDialog" aria-label="Cerrar">✕</button></div>
+    <div class="modalbody">
+      <p class="muted">Se guarda un archivo con todo lo de Hablemos: contactos, frases, palabras aprendidas, voz, conversaciones y Telegram con su token. Sirve para restaurar todo en otro navegador u otro teléfono.</p>
+      <label class="field" for="backupPass">Clave para proteger la copia</label>
+      <input id="backupPass" class="forminput" type="password" autocomplete="new-password" minlength="6" placeholder="Al menos 6 caracteres">
+      <label class="field" for="backupPass2">Repetir la clave</label>
+      <input id="backupPass2" class="forminput" type="password" autocomplete="new-password" minlength="6">
+      <p class="formhint">El archivo queda cifrado: sin la clave nadie puede ver el token ni los contactos. <b>Anotá la clave en un lugar seguro: si se olvida, la copia no se puede abrir.</b></p>
+      <div id="backupError" class="error" role="alert" hidden></div>
+      <button id="backupCreate" type="button" class="formbtn">Crear copia de seguridad</button>
+      <div id="backupDone" class="tg-ok" hidden>
+        ✅ Copia guardada en <b>Descargas</b>. Guardala también en un lugar seguro, por ejemplo Google Drive o un mensaje a vos mismo.
+        <button id="backupShare" type="button" class="clear wide" style="margin-top:10px" hidden>Compartir el archivo…</button>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog id="restoreDialog" aria-labelledby="restoreTitle">
+    <div class="modalhead"><h2 id="restoreTitle">📂 Restaurar copia</h2><button type="button" class="modalclose" data-close="restoreDialog" aria-label="Cerrar">✕</button></div>
+    <div class="modalbody">
+      <p class="muted">Carga una copia de seguridad de Hablemos en este navegador. Reemplaza los datos actuales.</p>
+      <label class="field" for="restoreFile">Archivo de la copia</label>
+      <input id="restoreFile" class="forminput" type="file" accept=".json,application/json">
+      <label class="field" for="restorePass">Clave de la copia</label>
+      <input id="restorePass" class="forminput" type="password" autocomplete="current-password">
+      <p class="formhint">Si la copia tiene Telegram, queda conectado enseguida. Usá Telegram en un solo navegador o teléfono a la vez: si otro lo está usando, Hablemos lo avisa con 🟠.</p>
+      <div id="restoreError" class="error" role="alert" hidden></div>
+      <button id="restoreBtn" type="button" class="formbtn">Restaurar</button>
+    </div>
+  </dialog>
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
-  <script src="./app.js?v=0.4.2" defer></script>
+  <script src="./app.js?v=0.5" defer></script>
 </body>
 </html>

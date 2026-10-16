@@ -101,7 +101,7 @@
   const repeatOptions=[0,500,1000,2000];
   const initial = {contacts:[],selectedContactId:null,ownPhrases:[],message:'',category:'frecuentes',combine:false,large:false,contrast:false,
     tokens:[],punctuation:'.',buildCategory:'inicio',savedMessages:[],customBlocks:[],mode:'build',
-    suggest:true,learned:{},voiceURI:'',rate:.9,pitch:1,volume:1,holdMs:0,repeatMs:0};
+    suggest:true,learned:{},voiceURI:'',rate:.9,pitch:1,volume:1,holdMs:0,repeatMs:0,lastBackup:0};
   const clampNumber=(value,min,max,fallback)=>typeof value==='number'&&isFinite(value)?Math.min(max,Math.max(min,value)):fallback;
   // V0.4: Telegram. threads = {chatId: [{dir:'in'|'out', text, date}]}; pending = personas que tocaron «Iniciar» y aún no están vinculadas.
   const tgInitial=()=>({token:'',bot:null,offset:0,autoRead:true,confirm:true,pending:[],threads:{}});
@@ -165,6 +165,7 @@
     state.volume=clampNumber(stored.volume,.1,1,state.volume);
     if(holdOptions.includes(stored.holdMs))state.holdMs=stored.holdMs;
     if(repeatOptions.includes(stored.repeatMs))state.repeatMs=stored.repeatMs;
+    if(Number.isFinite(stored.lastBackup)&&stored.lastBackup>0)state.lastBackup=stored.lastBackup;
   }
   applyStored(loadStored(STORE_KEY)||loadStored('hablemos.v2')||loadStored('hablemos.v1'));
   // Conserva los datos que esta versión no conoce (por ejemplo, guardados por una versión más nueva en otra pestaña).
@@ -693,7 +694,7 @@
   async function connectTelegram(){
     const ok=await verifyToken('tgToken','tgError','tgConnect');if(!ok)return;
     state.tg={...tgInitial(),token:ok.token,bot:botInfo(ok.me)};
-    persist();setConn('connecting');renderTgDialog();renderChat();startPolling();
+    persist();setConn('connecting');renderTgDialog();renderChat();startPolling();requestPersist();
     notify('Bot conectado: @'+ok.me.username);
   }
   // Cambiar el token (por ejemplo, después de /revoke) sin perder a las personas conectadas ni las conversaciones.
@@ -720,6 +721,92 @@
     if(!window.confirm('¿Desconectar Telegram? Se borran las conversaciones guardadas en Hablemos y las personas conectadas (los contactos con WhatsApp se mantienen).\n\nSi solo cambiaste el token con /revoke, no hace falta desconectar: usá «Cambiar el token».'))return;
     stopPolling();unlinkAllTelegram();
     state.tg=tgInitial();persist();setConn('idle');renderTgDialog();renderSelectedContact();$('incoming').hidden=true;notify('Telegram desconectado');
+  }
+  // ===== V0.5: datos permanentes y copia de seguridad cifrada =====
+  // El token no puede ir dentro de la app publicada (el código es público). Para configurar una sola vez:
+  // 1) se pide al navegador que no borre los datos; 2) una copia cifrada con clave permite restaurar todo en otro navegador o teléfono.
+  async function requestPersist(){
+    try{if(navigator.storage&&navigator.storage.persist&&!(await navigator.storage.persisted()))await navigator.storage.persist();}catch(e){}
+    renderBackupStatus();
+  }
+  async function renderBackupStatus(){
+    let persisted=false;
+    try{persisted=!!(navigator.storage&&navigator.storage.persisted&&await navigator.storage.persisted());}catch(e){}
+    $('storageStatus').textContent=persisted?'✅ Este navegador guarda los datos de Hablemos de forma permanente (no los borra por falta de espacio).':'ℹ️ Este navegador todavía no marcó los datos como permanentes. Instalar Hablemos como app ayuda. Igual conviene guardar una copia de seguridad.';
+    $('backupLast').textContent=state.lastBackup?'Última copia de seguridad: '+new Date(state.lastBackup).toLocaleDateString('es-AR',{day:'numeric',month:'long',year:'numeric'})+'.':'Todavía no se guardó ninguna copia de seguridad.';
+    $('tgBackupHint').hidden=!tgReady()||!!state.lastBackup;
+  }
+  const BACKUP_ITER=310000;
+  const b64=bytes=>{let out='';for(let i=0;i<bytes.length;i+=0x8000)out+=String.fromCharCode.apply(null,bytes.subarray(i,i+0x8000));return btoa(out);};
+  const unb64=text=>Uint8Array.from(atob(text),ch=>ch.charCodeAt(0));
+  async function backupKey(password,salt,iter){
+    const base=await crypto.subtle.importKey('raw',new TextEncoder().encode(password),'PBKDF2',false,['deriveKey']);
+    return crypto.subtle.deriveKey({name:'PBKDF2',salt,iterations:iter,hash:'SHA-256'},base,{name:'AES-GCM',length:256},false,['encrypt','decrypt']);
+  }
+  async function makeBackup(password){
+    const salt=crypto.getRandomValues(new Uint8Array(16)),iv=crypto.getRandomValues(new Uint8Array(12));
+    const key=await backupKey(password,salt,BACKUP_ITER);
+    const plain=new TextEncoder().encode(JSON.stringify({app:'hablemos',created:Date.now(),state}));
+    const data=new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv},key,plain));
+    return JSON.stringify({hablemos:'copia-de-seguridad',version:1,cifrado:'AES-GCM, clave PBKDF2-SHA256',iter:BACKUP_ITER,salt:b64(salt),iv:b64(iv),data:b64(data)});
+  }
+  async function openBackup(text,password){
+    let box=null;try{box=JSON.parse(text);}catch(e){}
+    if(!box||box.hablemos!=='copia-de-seguridad'||box.version!==1||typeof box.data!=='string')throw new Error('format');
+    const iter=Number.isInteger(box.iter)&&box.iter>=100000&&box.iter<=5000000?box.iter:BACKUP_ITER;
+    let plain;
+    try{const key=await backupKey(password,unb64(box.salt),iter);plain=await crypto.subtle.decrypt({name:'AES-GCM',iv:unb64(box.iv)},key,unb64(box.data));}
+    catch(e){throw new Error('password');}
+    let content=null;try{content=JSON.parse(new TextDecoder().decode(plain));}catch(e){}
+    if(!content||content.app!=='hablemos'||!content.state||typeof content.state!=='object')throw new Error('format');
+    return content;
+  }
+  let lastBackupFile=null;
+  function downloadFile(file){
+    const url=URL.createObjectURL(file);const a=document.createElement('a');
+    a.href=url;a.download=file.name;document.body.append(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),10000);
+  }
+  function openBackupDialog(){
+    for(const id of ['settingsDialog','tgDialog'])if($(id).open)$(id).close();
+    $('backupError').hidden=true;$('backupDone').hidden=true;$('backupDialog').showModal();
+  }
+  async function createBackup(){
+    const p1=$('backupPass').value,p2=$('backupPass2').value,err=$('backupError');err.hidden=true;
+    if(p1.length<6){err.textContent='La clave tiene que tener al menos 6 caracteres.';err.hidden=false;return;}
+    if(p1!==p2){err.textContent='Las dos claves no coinciden.';err.hidden=false;return;}
+    $('backupCreate').disabled=true;
+    try{
+      state.lastBackup=Date.now();
+      const text=await makeBackup(p1);
+      const file=new File([text],'hablemos-copia-'+new Date().toISOString().slice(0,10)+'.json',{type:'application/json'});
+      lastBackupFile=file;downloadFile(file);
+      $('backupPass').value='';$('backupPass2').value='';
+      persist();renderBackupStatus();requestPersist();
+      $('backupShare').hidden=!(navigator.canShare&&navigator.canShare({files:[file]}));
+      $('backupDone').hidden=false;
+      notify('Copia de seguridad guardada en Descargas');
+    }catch(e){err.textContent='No se pudo crear la copia en este navegador.';err.hidden=false;}
+    finally{$('backupCreate').disabled=false;}
+  }
+  async function restoreBackup(){
+    const file=$('restoreFile').files[0],pass=$('restorePass').value,err=$('restoreError');err.hidden=true;
+    const fail=msg=>{err.textContent=msg;err.hidden=false;};
+    if(!file)return fail('Elegí el archivo de la copia de seguridad (hablemos-copia-….json).');
+    if(!pass)return fail('Escribí la clave de la copia.');
+    if(file.size>5e6)return fail('Ese archivo es demasiado grande para ser una copia de Hablemos.');
+    $('restoreBtn').disabled=true;
+    try{
+      const content=await openBackup(await file.text(),pass);
+      const when=content.created?new Date(content.created).toLocaleString('es-AR',{day:'numeric',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'}):'';
+      if(!window.confirm('¿Reemplazar los datos de este navegador por los de la copia'+(when?' del '+when:'')+'?'))return;
+      stopPolling();
+      applyStored(content.state);persist();
+      setConn(state.tg.token?'connecting':'idle');renderAll();startPolling();requestPersist();
+      $('restorePass').value='';$('restoreFile').value='';$('restoreDialog').close();
+      notify('Copia restaurada'+(state.tg.token?'. Telegram quedó conectado.':'.'));
+    }catch(e){fail(e.message==='password'?'La clave no es correcta.':e.message==='format'?'Ese archivo no es una copia de seguridad de Hablemos.':'No se pudo abrir la copia.');}
+    finally{$('restoreBtn').disabled=false;}
   }
   function updateOffline(){$('offline').hidden=navigator.onLine;}
   function updatePrefs(){
@@ -801,7 +888,7 @@
   });
   $('largerText').addEventListener('change',e=>{state.large=e.target.checked;updatePrefs();persist();});
   $('highContrast').addEventListener('change',e=>{state.contrast=e.target.checked;updatePrefs();persist();});
-  $('settingsOpen').addEventListener('click',renderVoiceSettings);
+  $('settingsOpen').addEventListener('click',()=>{renderVoiceSettings();renderBackupStatus();});
   $('suggestToggle').addEventListener('change',e=>{state.suggest=e.target.checked;renderSuggestions();persist();});
   $('forgetLearned').addEventListener('click',()=>{
     if(!Object.keys(state.learned).length){notify('Todavía no hay palabras aprendidas.');return;}
@@ -861,6 +948,12 @@
   });
   $('incomingClose').addEventListener('click',()=>{$('incoming').hidden=true;});
   $('tgReplace').addEventListener('click',replaceToken);
+  $('backupOpen').addEventListener('click',openBackupDialog);
+  $('tgBackupBtn').addEventListener('click',openBackupDialog);
+  $('backupCreate').addEventListener('click',createBackup);
+  $('backupShare').addEventListener('click',async()=>{if(!lastBackupFile)return;try{await navigator.share({files:[lastBackupFile],title:'Copia de seguridad de Hablemos'});}catch(e){}});
+  $('restoreOpen').addEventListener('click',()=>{$('settingsDialog').close();$('restoreError').hidden=true;$('restoreDialog').showModal();});
+  $('restoreBtn').addEventListener('click',restoreBackup);
   // Sigue recibiendo aunque la pestaña quede en segundo plano. Al volver, consulta enseguida
   // (en Android la app se congela en segundo plano y la conexión pendiente puede haberse cortado).
   document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&tgReady())kickPolling();});
@@ -872,6 +965,7 @@
     if($('tgDialog').open)renderTgDialog();
     if($('settingsDialog').open)renderVoiceSettings();
     if($('contactsDialog').open)renderContactList();
+    renderBackupStatus();
   }
   // Otra pestaña o ventana de Hablemos guardó cambios: se cargan acá para no pisarlos después.
   window.addEventListener('storage',e=>{
@@ -883,7 +977,7 @@
     renderAll();
     startPolling();
   });
-  renderAll();updateOffline();startPolling();
+  renderAll();updateOffline();startPolling();if(tgReady())requestPersist();
   // Secure origin is required for an installable Android PWA and service worker.
   if('serviceWorker' in navigator && (location.protocol==='https:'||location.hostname==='localhost')){
     window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));
