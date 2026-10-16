@@ -9,7 +9,7 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Hablemos">
-  <title>Hablemos 0.5 · Conversaciones sin escribir</title>
+  <title>Hablemos 0.6 · Conversaciones sin escribir</title>
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./assets/icon-192.png" type="image/png">
   <style>
@@ -423,7 +423,18 @@
     <div class="modalhead"><h2 id="tgTitle">✈ Telegram</h2><button type="button" class="modalclose" data-close="tgDialog" aria-label="Cerrar">✕</button></div>
     <div class="modalbody">
       <div id="tgStepToken">
-        <p class="muted">Con un bot propio de Telegram, Hablemos envía y recibe mensajes sin salir de la app. Esta configuración la hace una sola vez quien acompaña.</p>
+        <p class="muted">Con un bot propio de Telegram, Hablemos envía y recibe mensajes sin salir de la app.</p>
+        <h3 class="settings-group">Conectar con el servidor de Hablemos (recomendado)</h3>
+        <p class="formhint">El token del bot queda guardado en el servidor, no en el teléfono. En cada teléfono o navegador nuevo alcanza con la dirección y el PIN. Los mensajes se guardan aunque Hablemos esté cerrada.</p>
+        <label class="field" for="srvUrl">Dirección del servidor</label>
+        <input id="srvUrl" class="forminput" type="url" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="https://….up.railway.app">
+        <label class="field" for="srvPin">PIN del servidor</label>
+        <input id="srvPin" class="forminput" type="password" autocomplete="off">
+        <div id="srvError" class="error" role="alert" hidden></div>
+        <button id="srvConnect" type="button" class="formbtn">Conectar con el servidor</button>
+        <details id="tgTokenBox" class="tg-replace" style="margin-top:18px">
+        <summary>Otra opción: conectar con el token, sin servidor</summary>
+        <p class="formhint">El token queda guardado en este navegador. Hay que repetir esto (o restaurar una copia) en cada navegador o teléfono.</p>
         <h3 class="settings-group">1. Crear el bot</h3>
         <ol class="steps">
           <li>En Telegram, abrir <a href="https://t.me/BotFather" target="_blank" rel="noopener">@BotFather</a> (el bot oficial de Telegram, con tilde azul).</li>
@@ -438,6 +449,7 @@
         <p class="formhint">El token queda guardado solo en este teléfono. Quien lo tenga puede enviar mensajes como el bot: no lo compartas.</p>
         <div id="tgError" class="error" role="alert" hidden></div>
         <button id="tgConnect" type="button" class="formbtn">Conectar el bot</button>
+        </details>
       </div>
       <div id="tgStepPeople" hidden>
         <p class="tg-ok">✅ Bot: <b id="tgBotName"></b></p>
@@ -453,6 +465,14 @@
           <input id="tgNewToken" class="forminput" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="123456789:AAH4...">
           <div id="tgReplaceError" class="error" role="alert" hidden></div>
           <button id="tgReplace" type="button" class="formbtn">Guardar token nuevo</button>
+        </details>
+        <details id="srvPinBox" class="tg-replace" hidden>
+          <summary>Cambiar el PIN del servidor</summary>
+          <p class="formhint">Usalo si cambiaste HABLEMOS_PIN en Railway.</p>
+          <label class="field" for="srvNewPin">PIN nuevo</label>
+          <input id="srvNewPin" class="forminput" type="password" autocomplete="off">
+          <div id="srvPinError" class="error" role="alert" hidden></div>
+          <button id="srvPinSave" type="button" class="formbtn">Guardar PIN</button>
         </details>
         <h3 class="settings-group">3. Invitar a la familia</h3>
         <p class="formhint">Cada persona abre este enlace en su teléfono, con Telegram instalado, y toca <b>Iniciar</b>:</p>
@@ -506,6 +526,6 @@
     </div>
   </dialog>
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
-  <script src="./app.js?v=0.5" defer></script>
+  <script src="./app.js?v=0.6" defer></script>
 </body>
 </html>

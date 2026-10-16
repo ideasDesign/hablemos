@@ -104,7 +104,10 @@
     suggest:true,learned:{},voiceURI:'',rate:.9,pitch:1,volume:1,holdMs:0,repeatMs:0,lastBackup:0};
   const clampNumber=(value,min,max,fallback)=>typeof value==='number'&&isFinite(value)?Math.min(max,Math.max(min,value)):fallback;
   // V0.4: Telegram. threads = {chatId: [{dir:'in'|'out', text, date}]}; pending = personas que tocaron «Iniciar» y aún no están vinculadas.
-  const tgInitial=()=>({token:'',bot:null,offset:0,autoRead:true,confirm:true,pending:[],threads:{}});
+  // V0.6: server = {url, pin} cuando Hablemos se conecta a su propio servidor (el token queda en el servidor). seq/pv = hasta dónde se sincronizó.
+  const tgInitial=()=>({token:'',server:null,seq:0,pv:-1,bot:null,offset:0,autoRead:true,confirm:true,pending:[],threads:{}});
+  const DEFAULT_SERVER_URL='';
+  const serverUrlOk=v=>typeof v==='string'&&/^https?:\/\/[^\s/]+(:\d+)?\/?$/.test(v);
   const chatIdOk=v=>typeof v==='string'&&/^-?\d{1,20}$/.test(v);
   let state = {...initial,learned:{},tg:tgInitial()};
   function loadStored(key) {
@@ -120,8 +123,12 @@
     if(!stored)return;
     if(Array.isArray(stored.contacts)) state.contacts=stored.contacts.filter(x=>x&&typeof x.name==='string'&&typeof x.phone==='string'&&typeof x.id==='string').slice(0,50).map(x=>({id:x.id,name:x.name.slice(0,36),phone:x.phone.replace(/\D/g,''),...(chatIdOk(x.telegramId)?{telegramId:x.telegramId}:{})}));
     const tg=stored.tg;
-    if(tg&&typeof tg==='object'&&!Array.isArray(tg)&&typeof tg.token==='string'&&/^\d{3,15}:[\w-]{20,80}$/.test(tg.token)){
-      const clean=tgInitial();clean.token=tg.token;
+    const tokenOk=tg&&typeof tg.token==='string'&&/^\d{3,15}:[\w-]{20,80}$/.test(tg.token);
+    const serverOk=tg&&tg.server&&serverUrlOk(tg.server.url)&&typeof tg.server.pin==='string'&&tg.server.pin.length>0&&tg.server.pin.length<=128;
+    if(tg&&typeof tg==='object'&&!Array.isArray(tg)&&(tokenOk||serverOk)){
+      const clean=tgInitial();
+      if(serverOk){clean.server={url:tg.server.url.replace(/\/$/,''),pin:tg.server.pin};if(Number.isInteger(tg.seq)&&tg.seq>=0)clean.seq=tg.seq;if(Number.isInteger(tg.pv))clean.pv=tg.pv;}
+      else clean.token=tg.token;
       if(tg.bot&&typeof tg.bot.username==='string')clean.bot={username:tg.bot.username.slice(0,64),name:String(tg.bot.name||tg.bot.username).slice(0,64),...(Number.isInteger(tg.bot.id)?{id:tg.bot.id}:{})};
       if(Number.isInteger(tg.offset)&&tg.offset>=0)clean.offset=tg.offset;
       if(typeof tg.autoRead==='boolean')clean.autoRead=tg.autoRead;
@@ -434,7 +441,27 @@
   // Todo se hace desde el teléfono contra la API oficial de Telegram, sin servidor propio.
   // Se usan pedidos POST con formulario (sin cabeceras extra) para que el navegador no exija preflight CORS.
   const TG_API='https://api.telegram.org/bot';
-  const tgReady=()=>!!state.tg.token;
+  const tgReady=()=>!!(state.tg.token||state.tg.server);
+  const isServer=()=>!!state.tg.server;
+  // Identifica la conexión actual: si cambia (otro token, otro servidor o PIN), se reinicia la recepción.
+  const tgKey=()=>state.tg.server?'srv|'+state.tg.server.url+'|'+state.tg.server.pin:state.tg.token;
+  async function srvCall(path,{method='GET',body,signal,server=state.tg.server}={}){
+    const res=await fetch(server.url+path,{method,signal,cache:'no-store',headers:{authorization:'Bearer '+server.pin,...(body?{'content-type':'application/json'}:{})},body:body?JSON.stringify(body):undefined});
+    let data=null;try{data=await res.json();}catch(e){}
+    if(!res.ok){const err=new Error(data&&data.error||'HTTP '+res.status);err.code=res.status;err.error=data&&data.error;err.missing=data&&data.missing;throw err;}
+    return data;
+  }
+  function srvError(e,who){
+    if(e.code===401)return 'El PIN del servidor no es correcto. Revisalo en Configuración → Telegram.';
+    if(e.code===429&&e.error==='too-many-attempts')return 'Hubo demasiados intentos con PIN equivocado. El servidor espera 15 minutos.';
+    if(e.code===503)return 'El servidor todavía no tiene el token o el PIN. Cargalos en Railway → Variables.';
+    if(e.error==='blocked')return (who||'Esta persona')+' bloqueó o eliminó el bot. Tiene que volver a tocar «Iniciar».';
+    if(e.error==='not-linked'||e.error==='chat-not-found')return (who||'Esta persona')+' ya no está conectada en el servidor. Tiene que tocar «Iniciar» en el bot.';
+    if(e.error==='telegram-busy')return 'Telegram pide esperar un momento antes de volver a enviar.';
+    if(e.error==='bad-token')return 'El servidor no puede usar el token del bot. Revisá TELEGRAM_TOKEN en Railway.';
+    return 'No se pudo conectar con el servidor. Revisá la conexión e intentá de nuevo.';
+  }
+  const newContactId=()=>Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,8);
   const sleep=ms=>new Promise(r=>setTimeout(r,ms));
   async function tgCall(method,params={},signal,token=state.tg.token){
     const body=new URLSearchParams();
@@ -496,12 +523,48 @@
     }
     if(changed){persist();renderChat();if($('tgDialog').open)renderTgDialog();}
   }
+  // Aplica lo que manda el servidor: personas (pendientes y conectadas) y mensajes nuevos.
+  // Las personas conectadas en el servidor aparecen como contactos en cualquier dispositivo nuevo.
+  function handleServerSync(r){
+    if(!r||typeof r!=='object')return;
+    const first=state.tg.seq===0||!!r.reset;
+    if(r.reset)state.tg.threads={};
+    if(Array.isArray(r.people)){
+      const people=r.people.filter(p=>p&&chatIdOk(String(p.chatId)));
+      state.tg.pending=people.filter(p=>p.status==='pending').slice(0,30).map(p=>({chatId:String(p.chatId),name:String(p.name||'Sin nombre').slice(0,64),username:String(p.username||'').slice(0,64)}));
+      const linked=people.filter(p=>p.status==='linked');
+      const ids=new Set(linked.map(p=>String(p.chatId)));
+      for(const p of linked){
+        const chatId=String(p.chatId);
+        if(!contactByChat(chatId)&&state.contacts.length<50)state.contacts.push({id:newContactId(),name:String(p.name||'Sin nombre').slice(0,36),phone:'',telegramId:chatId});
+      }
+      for(const c of state.contacts)if(c.telegramId&&!ids.has(c.telegramId))delete c.telegramId;
+      state.contacts=state.contacts.filter(c=>c.phone||c.telegramId);
+      if(!selected())state.selectedContactId=state.contacts.length===1?state.contacts[0].id:null;
+      if(Number.isInteger(r.pv))state.tg.pv=r.pv;
+    }
+    for(const m of Array.isArray(r.messages)?r.messages:[]){
+      if(!m||!chatIdOk(String(m.chatId))||(m.dir!=='in'&&m.dir!=='out')||typeof m.text!=='string'||!Number.isInteger(m.seq))continue;
+      const chatId=String(m.chatId);
+      const added=pushThread(chatId,m.dir,m.text,Number(m.date)||Date.now(),m.seq);
+      // Al conectar por primera vez se cargan los mensajes viejos sin anunciarlos.
+      if(added&&m.dir==='in'&&!first){const c=contactByChat(chatId);if(c)showIncoming(c,m.text);}
+    }
+    if(Number.isInteger(r.seq))state.tg.seq=r.seq;
+    persist();renderSelectedContact();renderContactListIfOpen();
+    if($('tgDialog').open)renderTgDialog();
+  }
+  function renderContactListIfOpen(){if($('contactsDialog').open)renderContactList();}
   // Estado de la conexión, visible en pantalla para saber qué pasa si no llegan mensajes.
   let tgConn='idle';
   const connText={
     idle:'',
     connecting:'🟡 Conectando con Telegram…',
     ok:'🟢 Conectado. Los mensajes llegan mientras Hablemos está abierta.',
+    'ok-server':'🟢 Conectado al servidor. Los mensajes se guardan aunque Hablemos esté cerrada.',
+    'bad-pin':'🔴 El PIN no es correcto (¿se cambió HABLEMOS_PIN en Railway?). Escribí el PIN nuevo en Configuración → Telegram → «Cambiar el PIN».',
+    'too-many':'🔴 Hubo demasiados intentos con PIN equivocado. El servidor espera 15 minutos antes de aceptar otro.',
+    'not-configured':'🟠 El servidor todavía no tiene el token o el PIN. Cargalos en Railway → Variables (TELEGRAM_TOKEN y HABLEMOS_PIN).',
     'other-tab':'🟢 Conectado desde otra pestaña o ventana de Hablemos en este dispositivo.',
     retrying:'🟡 Se cortó la conexión con Telegram. Reintentando…',
     offline:'⚪ Sin internet. Los mensajes van a llegar cuando vuelva la conexión.',
@@ -510,25 +573,38 @@
   };
   function setConn(s){if(tgConn===s)return;tgConn=s;renderConn();}
   function renderConn(){
-    const text=tgReady()?connText[tgConn]:'';
+    const text=tgReady()?connText[tgConn==='ok'&&isServer()?'ok-server':tgConn]:'';
     for(const id of ['chatStatus','tgConnStatus']){const el=$(id);el.textContent=text;el.hidden=!text;el.dataset.state=tgConn;}
     renderTgStatus();
   }
   // Solo una pestaña de este dispositivo consulta a Telegram a la vez (Web Locks). Las demás se enteran por el almacenamiento compartido.
   let pollCtrl=null,polling=false,quickPoll=false,reportPending=false;
   async function pollLoop(){
-    const token=state.tg.token;
-    while(tgReady()&&state.tg.token===token){
+    const token=state.tg.token,key=tgKey();
+    while(tgReady()&&tgKey()===key){
       if(!navigator.onLine){setConn('offline');return 'offline';}
       const ctrl=pollCtrl=new AbortController();
       const timeout=quickPoll?0:25;quickPoll=false;
       try{
-        const updates=await tgCall('getUpdates',{offset:state.tg.offset,timeout,allowed_updates:['message']},ctrl.signal,token);
-        setConn('ok');
-        handleUpdates(updates);
+        if(isServer()){
+          const r=await srvCall('/api/sync?since='+state.tg.seq+'&pv='+state.tg.pv+'&wait='+(timeout?1:0),{signal:ctrl.signal});
+          if(tgKey()!==key)continue;
+          setConn('ok');
+          handleServerSync(r);
+        }else{
+          const updates=await tgCall('getUpdates',{offset:state.tg.offset,timeout,allowed_updates:['message']},ctrl.signal,token);
+          setConn('ok');
+          handleUpdates(updates);
+        }
         if(reportPending){reportPending=false;if(!state.tg.pending.length)notify('Todavía no hay personas nuevas. Pediles que abran el enlace y toquen «Iniciar».');}
       }catch(e){
         if(ctrl.signal.aborted){if(ctrl.signal.reason==='kick')continue;return 'stopped';}
+        if(isServer()){
+          if(e.code===401){setConn('bad-pin');notify(srvError(e));return 'invalid';}
+          if(e.code===429&&e.error==='too-many-attempts'){setConn('too-many');await sleep(60000);continue;}
+          if(e.code===503){setConn('not-configured');await sleep(30000);continue;}
+          setConn('retrying');await sleep(5000);continue;
+        }
         if(e.code===401){setConn('invalid');notify(tgError(e));return 'invalid';}
         setConn(e.code===409?'conflict':'retrying');
         await sleep(e.code===409?15000:5000);
@@ -606,24 +682,31 @@
     if(sending||!c||!c.telegramId||!msg)return;
     sending=true;notify('Enviando a '+c.name+'…');
     try{
-      await tgCall('sendMessage',{chat_id:c.telegramId,text:msg});
-      learnFromMessage();
-      pushThread(c.telegramId,'out',msg,Date.now());persist();renderChat();
+      if(isServer()){
+        const r=await srvCall('/api/send',{method:'POST',body:{chatId:c.telegramId,text:msg}});
+        pushThread(c.telegramId,'out',msg,r.message&&r.message.date||Date.now(),r.message&&r.message.seq);
+      }else{
+        await tgCall('sendMessage',{chat_id:c.telegramId,text:msg});
+        pushThread(c.telegramId,'out',msg,Date.now());
+      }
+      learnFromMessage();persist();renderChat();
       notify('✓ Enviado a '+c.name);
-    }catch(e){notify(tgError(e,c.name));}
+    }catch(e){notify(isServer()?srvError(e,c.name):tgError(e,c.name));}
     finally{sending=false;}
   }
   // --- Configuración y vinculación ---
   const botLink=()=>state.tg.bot?'https://t.me/'+state.tg.bot.username:'';
   function renderTgStatus(){
-    $('tgStatus').textContent=tgReady()?'Bot @'+(state.tg.bot?state.tg.bot.username:'bot')+' · '+state.contacts.filter(c=>c.telegramId).length+' persona(s) conectada(s). '+(connText[tgConn]||''):'Sin configurar. Permite enviar y recibir mensajes sin salir de Hablemos.';
+    $('tgStatus').textContent=tgReady()?(isServer()?'Servidor · ':'')+'Bot @'+(state.tg.bot?state.tg.bot.username:'bot')+' · '+state.contacts.filter(c=>c.telegramId).length+' persona(s) conectada(s). '+(connText[tgConn]||''):'Sin configurar. Permite enviar y recibir mensajes sin salir de Hablemos.';
   }
   function renderTgDialog(){
     const ready=tgReady();
     $('tgStepToken').hidden=ready;$('tgStepPeople').hidden=!ready;
     renderConn();
-    if(!ready)return;
+    if(!ready){if(!$('srvUrl').value)$('srvUrl').value=DEFAULT_SERVER_URL;return;}
+    $('tgReplaceBox').hidden=isServer();$('srvPinBox').hidden=!isServer();
     if(tgConn==='invalid')$('tgReplaceBox').open=true;
+    if(tgConn==='bad-pin')$('srvPinBox').open=true;
     $('tgBotName').textContent=state.tg.bot?state.tg.bot.name+' (@'+state.tg.bot.username+')':'tu bot';
     $('tgLink').textContent=botLink();
     $('tgAutoRead').checked=state.tg.autoRead;$('tgConfirm').checked=state.tg.confirm;
@@ -641,7 +724,10 @@
       const ok=document.createElement('button');ok.type='button';ok.className='formbtn';ok.textContent='✓ Conectar';
       ok.addEventListener('click',()=>linkPerson(p,select.value));
       const no=document.createElement('button');no.type='button';no.className='clear';no.textContent='Ignorar';
-      no.addEventListener('click',()=>{state.tg.pending=state.tg.pending.filter(x=>x.chatId!==p.chatId);persist();renderTgDialog();});
+      no.addEventListener('click',async()=>{
+        if(isServer()){try{await srvCall('/api/people/ignore',{method:'POST',body:{chatId:p.chatId}});}catch(e){notify(srvError(e));return;}}
+        state.tg.pending=state.tg.pending.filter(x=>x.chatId!==p.chatId);persist();renderTgDialog();
+      });
       actions.append(ok,no);box.append(title,label,select,actions);pend.append(box);
     }
     const linked=$('tgLinked');linked.replaceChildren();
@@ -651,8 +737,9 @@
       const row=document.createElement('div');row.className='contactline';
       const name=document.createElement('div');name.className='tg-linked-name';name.textContent='✈ '+c.name;
       const del=document.createElement('button');del.type='button';del.className='delete';del.textContent='Quitar';del.setAttribute('aria-label','Desconectar a '+c.name+' de Telegram');
-      del.addEventListener('click',()=>{
+      del.addEventListener('click',async()=>{
         if(!window.confirm('¿Desconectar a '+c.name+' de Telegram? El contacto se mantiene.'))return;
+        if(isServer()){try{await srvCall('/api/people/unlink',{method:'POST',body:{chatId:c.telegramId}});}catch(e){notify(srvError(e));return;}}
         delete state.tg.threads[c.telegramId];delete c.telegramId;
         if(!c.phone)state.contacts=state.contacts.filter(x=>x.id!==c.id);
         if(!selected())state.selectedContactId=null;
@@ -663,16 +750,18 @@
   }
   async function linkPerson(p,contactId){
     let c=contactId?state.contacts.find(x=>x.id===contactId):null;
-    if(!c){
-      if(state.contacts.length>=50){notify('Se alcanzó el máximo de contactos.');return;}
-      c={id:Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,8),name:p.name.slice(0,36),phone:''};
-      state.contacts.push(c);
+    if(!c&&state.contacts.length>=50){notify('Se alcanzó el máximo de contactos.');return;}
+    if(isServer()){
+      // El servidor manda la bienvenida y avisa a los demás dispositivos.
+      try{await srvCall('/api/people/link',{method:'POST',body:{chatId:p.chatId,name:c?c.name:p.name}});}
+      catch(e){notify(srvError(e));return;}
     }
+    if(!c){c={id:newContactId(),name:p.name.slice(0,36),phone:''};state.contacts.push(c);}
     c.telegramId=p.chatId;
     state.tg.pending=state.tg.pending.filter(x=>x.chatId!==p.chatId);
     if(!state.selectedContactId)state.selectedContactId=c.id;
     persist();renderTgDialog();renderSelectedContact();notify(c.name+' quedó conectado por Telegram');
-    try{await tgCall('sendMessage',{chat_id:p.chatId,text:'✅ ¡Listo! Ya estás conectado/a. Los mensajes de Hablemos te van a llegar por este chat, y podés responder escribiendo acá.'});}catch(e){}
+    if(!isServer())try{await tgCall('sendMessage',{chat_id:p.chatId,text:'✅ ¡Listo! Ya estás conectado/a. Los mensajes de Hablemos te van a llegar por este chat, y podés responder escribiendo acá.'});}catch(e){}
   }
   // Comprueba un token con Telegram. Devuelve {token, me} o null (y muestra el error en pantalla).
   async function verifyToken(inputId,errorId,buttonId){
@@ -712,13 +801,49 @@
     stopPolling();persist();setConn('connecting');renderTgDialog();renderSelectedContact();startPolling();
     notify(sameBot?'Token actualizado. Las personas conectadas se mantienen.':'Bot nuevo conectado: @'+ok.me.username);
   }
+  // Conecta este dispositivo al servidor de Hablemos con su dirección y el PIN.
+  async function checkServer(url,pin,errorId,buttonId){
+    const error=$(errorId);error.hidden=true;
+    const fail=msg=>{error.textContent=msg;error.hidden=false;return null;};
+    url=url.trim().replace(/\/+$/,'');
+    if(!/^https?:\/\//i.test(url)&&url)url='https://'+url;
+    if(!serverUrlOk(url))return fail('Escribí la dirección del servidor, por ejemplo https://hablemos-servidor.up.railway.app');
+    if(!pin)return fail('Escribí el PIN del servidor.');
+    if(!navigator.onLine)return fail('Se necesita internet para conectar con el servidor.');
+    $(buttonId).disabled=true;
+    try{
+      const r=await srvCall('/api/status',{server:{url,pin}});
+      if(!r.bot)return fail(r.botError?'El servidor no puede usar el bot: '+r.botError:'El servidor todavía no pudo hablar con Telegram. Revisá TELEGRAM_TOKEN en Railway.');
+      return {url,pin,status:r};
+    }catch(e){return fail(e.code?srvError(e):'No se pudo llegar al servidor. Revisá la dirección y la conexión.');}
+    finally{$(buttonId).disabled=false;}
+  }
+  async function connectServer(){
+    const ok=await checkServer($('srvUrl').value,$('srvPin').value,'srvError','srvConnect');if(!ok)return;
+    // Si había personas conectadas con el token directo, se pasan al servidor para no tener que reconectarlas.
+    const before=state.contacts.filter(c=>c.telegramId);
+    stopPolling();
+    state.tg={...tgInitial(),server:{url:ok.url,pin:ok.pin},bot:ok.status.bot,autoRead:state.tg.autoRead,confirm:state.tg.confirm,threads:state.tg.threads};
+    for(const c of before){try{await srvCall('/api/people/link',{method:'POST',body:{chatId:c.telegramId,name:c.name,migrate:true}});}catch(e){}}
+    $('srvPin').value='';
+    persist();setConn('connecting');renderTgDialog();renderChat();startPolling();requestPersist();
+    notify('Conectado al servidor · bot @'+ok.status.bot.username+(ok.status.persistent?'':' (⚠️ el servidor no tiene almacenamiento permanente)'));
+  }
+  async function changeServerPin(){
+    const ok=await checkServer(state.tg.server.url,$('srvNewPin').value,'srvPinError','srvPinSave');if(!ok)return;
+    $('srvNewPin').value='';state.tg.server={url:ok.url,pin:ok.pin};
+    stopPolling();persist();setConn('connecting');renderTgDialog();startPolling();notify('PIN actualizado');
+  }
   function unlinkAllTelegram(){
     state.contacts=state.contacts.filter(c=>c.phone);
     for(const c of state.contacts)delete c.telegramId;
     if(!selected())state.selectedContactId=null;
   }
   function disconnectTelegram(){
-    if(!window.confirm('¿Desconectar Telegram? Se borran las conversaciones guardadas en Hablemos y las personas conectadas (los contactos con WhatsApp se mantienen).\n\nSi solo cambiaste el token con /revoke, no hace falta desconectar: usá «Cambiar el token».'))return;
+    const question=isServer()
+      ?'¿Desconectar este dispositivo del servidor? Las personas y las conversaciones quedan guardadas en el servidor: para volver a conectar alcanza con la dirección y el PIN.'
+      :'¿Desconectar Telegram? Se borran las conversaciones guardadas en Hablemos y las personas conectadas (los contactos con WhatsApp se mantienen).\n\nSi solo cambiaste el token con /revoke, no hace falta desconectar: usá «Cambiar el token».';
+    if(!window.confirm(question))return;
     stopPolling();unlinkAllTelegram();
     state.tg=tgInitial();persist();setConn('idle');renderTgDialog();renderSelectedContact();$('incoming').hidden=true;notify('Telegram desconectado');
   }
@@ -734,7 +859,7 @@
     try{persisted=!!(navigator.storage&&navigator.storage.persisted&&await navigator.storage.persisted());}catch(e){}
     $('storageStatus').textContent=persisted?'✅ Este navegador guarda los datos de Hablemos de forma permanente (no los borra por falta de espacio).':'ℹ️ Este navegador todavía no marcó los datos como permanentes. Instalar Hablemos como app ayuda. Igual conviene guardar una copia de seguridad.';
     $('backupLast').textContent=state.lastBackup?'Última copia de seguridad: '+new Date(state.lastBackup).toLocaleDateString('es-AR',{day:'numeric',month:'long',year:'numeric'})+'.':'Todavía no se guardó ninguna copia de seguridad.';
-    $('tgBackupHint').hidden=!tgReady()||!!state.lastBackup;
+    $('tgBackupHint').hidden=!tgReady()||!!state.lastBackup||isServer();
   }
   const BACKUP_ITER=310000;
   const b64=bytes=>{let out='';for(let i=0;i<bytes.length;i+=0x8000)out+=String.fromCharCode.apply(null,bytes.subarray(i,i+0x8000));return btoa(out);};
@@ -802,9 +927,9 @@
       if(!window.confirm('¿Reemplazar los datos de este navegador por los de la copia'+(when?' del '+when:'')+'?'))return;
       stopPolling();
       applyStored(content.state);persist();
-      setConn(state.tg.token?'connecting':'idle');renderAll();startPolling();requestPersist();
+      setConn(tgReady()?'connecting':'idle');renderAll();startPolling();requestPersist();
       $('restorePass').value='';$('restoreFile').value='';$('restoreDialog').close();
-      notify('Copia restaurada'+(state.tg.token?'. Telegram quedó conectado.':'.'));
+      notify('Copia restaurada'+(tgReady()?'. Telegram quedó conectado.':'.'));
     }catch(e){fail(e.message==='password'?'La clave no es correcta.':e.message==='format'?'Ese archivo no es una copia de seguridad de Hablemos.':'No se pudo abrir la copia.');}
     finally{$('restoreBtn').disabled=false;}
   }
@@ -948,6 +1073,8 @@
   });
   $('incomingClose').addEventListener('click',()=>{$('incoming').hidden=true;});
   $('tgReplace').addEventListener('click',replaceToken);
+  $('srvConnect').addEventListener('click',connectServer);
+  $('srvPinSave').addEventListener('click',changeServerPin);
   $('backupOpen').addEventListener('click',openBackupDialog);
   $('tgBackupBtn').addEventListener('click',openBackupDialog);
   $('backupCreate').addEventListener('click',createBackup);
@@ -970,10 +1097,10 @@
   // Otra pestaña o ventana de Hablemos guardó cambios: se cargan acá para no pisarlos después.
   window.addEventListener('storage',e=>{
     if(e.storageArea!==localStorage||(e.key!==STORE_KEY&&e.key!==null))return;
-    const oldToken=state.tg.token,oldOffset=state.tg.offset;
+    const oldKey=tgKey(),oldOffset=state.tg.offset,oldSeq=state.tg.seq;
     applyStored(loadStored(STORE_KEY));
-    if(state.tg.token===oldToken)state.tg.offset=Math.max(state.tg.offset,oldOffset);
-    else{stopPolling();setConn(state.tg.token?'connecting':'idle');}
+    if(tgKey()===oldKey){state.tg.offset=Math.max(state.tg.offset,oldOffset);state.tg.seq=Math.max(state.tg.seq,oldSeq);}
+    else{stopPolling();setConn(tgReady()?'connecting':'idle');}
     renderAll();
     startPolling();
   });

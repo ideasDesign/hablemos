@@ -1,0 +1,13 @@
+{
+  "name": "hablemos-servidor",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Servidor de Hablemos para Telegram: guarda el token como variable de entorno y atiende a la app con un PIN.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
