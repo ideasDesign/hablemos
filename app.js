@@ -101,7 +101,7 @@
   const repeatOptions=[0,500,1000,2000];
   const initial = {contacts:[],selectedContactId:null,ownPhrases:[],message:'',category:'frecuentes',combine:false,large:false,contrast:false,
     tokens:[],punctuation:'.',buildCategory:'inicio',savedMessages:[],customBlocks:[],mode:'build',
-    suggest:true,learned:{},replyLearned:{},voiceURI:'',rate:.9,pitch:1,volume:1,holdMs:0,repeatMs:0,lastBackup:0};
+    suggest:true,aiReplies:true,learned:{},replyLearned:{},voiceURI:'',rate:.9,pitch:1,volume:1,holdMs:0,repeatMs:0,lastBackup:0};
   const clampNumber=(value,min,max,fallback)=>typeof value==='number'&&isFinite(value)?Math.min(max,Math.max(min,value)):fallback;
   // V0.4: Telegram. threads = {chatId: [{dir:'in'|'out', text, date}]}; pending = personas que tocaron «Iniciar» y aún no están vinculadas.
   // V0.6: server = {url, pin} cuando Hablemos se conecta a su propio servidor (el token queda en el servidor). seq/pv = hasta dónde se sincronizó.
@@ -135,6 +135,7 @@
       if(typeof tg.confirm==='boolean')clean.confirm=tg.confirm;
       if(typeof tg.chime==='boolean')clean.chime=tg.chime;
       if(typeof tg.push==='boolean')clean.push=tg.push;
+      if(typeof tg.ai==='boolean')clean.ai=tg.ai;
       if(Array.isArray(tg.pending))clean.pending=tg.pending.filter(p=>p&&chatIdOk(p.chatId)&&typeof p.name==='string').slice(0,20).map(p=>({chatId:p.chatId,name:p.name.slice(0,64),username:typeof p.username==='string'?p.username.slice(0,64):''}));
       if(tg.threads&&typeof tg.threads==='object'){
         for(const [chatId,list] of Object.entries(tg.threads).slice(0,30)){
@@ -156,6 +157,7 @@
     if(Array.isArray(stored.savedMessages))state.savedMessages=stored.savedMessages.filter(x=>typeof x==='string'&&x.trim()&&x.length<=1000).slice(0,60);
     if(['build','quick','saved'].includes(stored.mode))state.mode=stored.mode;
     if(typeof stored.suggest==='boolean')state.suggest=stored.suggest;
+    if(typeof stored.aiReplies==='boolean')state.aiReplies=stored.aiReplies;
     if(stored.replyLearned&&typeof stored.replyLearned==='object'&&!Array.isArray(stored.replyLearned)){
       for(const [intent,counts] of Object.entries(stored.replyLearned).slice(0,40)){
         if(!/^[a-z-]{2,20}$/.test(intent)||!counts||typeof counts!=='object')continue;
@@ -286,6 +288,22 @@
     counts[text]=Math.min((counts[text]||0)+1,999);
   }
   const lastIncoming=c=>(state.tg.threads[c.telegramId]||[]).filter(m=>m.dir==='in').at(-1)||null;
+  // Respuestas sugeridas por inteligencia artificial (Claude, desde el servidor). Si no hay, tardan o fallan,
+  // quedan las respuestas por reglas: Diego nunca se queda sin opciones.
+  const aiCache=new Map();
+  const aiOn=()=>isServer()&&state.tg.ai===true&&state.aiReplies;
+  function aiFor(c,last){
+    if(!aiOn()||!last)return null;
+    const key=c.telegramId+':'+(last.id||last.date);
+    if(aiCache.has(key))return aiCache.get(key);
+    const entry={status:'loading',replies:[]};aiCache.set(key,entry);
+    if(aiCache.size>50)aiCache.delete(aiCache.keys().next().value);
+    srvCall('/api/suggest',{method:'POST',body:{chatId:c.telegramId}})
+      .then(r=>{entry.status='done';entry.replies=(Array.isArray(r.replies)?r.replies:[]).filter(x=>typeof x==='string'&&x.trim()).slice(0,6);})
+      .catch(()=>{entry.status='error';})
+      .finally(()=>{if(view.startsWith('reply:'+c.id))renderBoard();});
+    return entry;
+  }
   function openReply(c){state.selectedContactId=c.id;markRead(c);persist();view='reply:'+c.id;page=0;renderScreen();}
   // Elegir una respuesta abre «¿A quién se lo mando?» con esa persona primero: responder son dos toques.
   function chooseReply(text,c,intent){
@@ -385,7 +403,12 @@
       const items=[tile('quote',last?c.name+': «'+last.text+'»':'Escribile a '+c.name,()=>{if(last)talk(c.name+' dice: '+last.text);},'🔊'),backTo(sub?'reply:'+cid:'main')];
       if(sub&&replySubs[sub])for(const r of replySubs[sub])items.push(tile('reply',r,()=>chooseReply(r,c,intent)));
       else{
+        const aiState=aiFor(c,last);
+        const shown=new Set();
+        if(aiState&&aiState.status==='loading')items.push(tile('nav','Pensando respuestas…',()=>notify('Un momento: estoy pensando respuestas.'),'✨'));
+        if(aiState&&aiState.status==='done')for(const r of aiState.replies){shown.add(normText(r));items.push(tile('reply',r,()=>chooseReply(r,c,intent),'✨'));}
         for(const o of options){
+          if(typeof o==='string'&&shown.has(normText(o)))continue;
           if(typeof o==='string')items.push(tile('reply',o,()=>chooseReply(o,c,intent)));
           else items.push(tile('folder',o.label,()=>go('reply:'+cid+':'+o.sub),o.icon||'📂'));
         }
@@ -685,6 +708,7 @@
     if(Number.isInteger(r.seq))state.tg.seq=r.seq;
     state.tg.synced=true;
     if(typeof r.invite==='string'&&/^[\w-]{8,64}$/.test(r.invite))state.tg.invite=r.invite;
+    if(typeof r.ai==='boolean')state.tg.ai=r.ai;
     renderJoinRequest();
     persist();renderSelectedContact();renderContactListIfOpen();
     if($('tgDialog').open)renderTgDialog();
@@ -893,6 +917,7 @@
       :'Cada persona abre este enlace en su teléfono, con Telegram instalado, y toca <b>Iniciar</b>:';
     $('tgNewInvite').hidden=!isServer();
     $('tgChime').checked=state.tg.chime;renderPushStatus();
+    $('aiRow').hidden=!(isServer()&&state.tg.ai);$('aiReplies').checked=state.aiReplies;
     $('tgAutoRead').checked=state.tg.autoRead;
     const pend=$('tgPending');pend.replaceChildren();
     if(!state.tg.pending.length){const p=document.createElement('p');p.className='muted';p.textContent='No hay personas esperando. Cuando alguien toque «Iniciar», tocá «Buscar personas».';pend.append(p);}
@@ -1296,6 +1321,7 @@
   });
   $('tgAutoRead').addEventListener('change',e=>{state.tg.autoRead=e.target.checked;persist();});
   $('tgChime').addEventListener('change',e=>{state.tg.chime=e.target.checked;persist();if(e.target.checked)chime();});
+  $('aiReplies').addEventListener('change',e=>{state.aiReplies=e.target.checked;persist();});
   $('pushEnable').addEventListener('click',()=>enablePush());
   $('pushTest').addEventListener('click',async()=>{
     try{const r=await srvCall('/api/push/test',{method:'POST',body:{}});notify(r.sent?'Aviso enviado: mirá la barra de notificaciones del teléfono.':'No hay teléfonos con avisos activados.');}

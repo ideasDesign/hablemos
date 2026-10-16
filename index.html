@@ -9,7 +9,7 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Hablemos">
-  <title>Hablemos 1.0 · Conversaciones sin escribir</title>
+  <title>Hablemos 1.1 · Conversaciones sin escribir</title>
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./assets/icon-192.png" type="image/png">
   <style>
@@ -509,6 +509,10 @@
         <h3 class="settings-group">Opciones</h3>
         <div class="settingrow"><label for="tgAutoRead">Leer en voz alta los mensajes que llegan</label><input id="tgAutoRead" type="checkbox"></div>
         <div class="settingrow"><label for="tgChime">Sonar y vibrar cuando llega un mensaje</label><input id="tgChime" type="checkbox"></div>
+        <div id="aiRow" hidden>
+          <div class="settingrow"><label for="aiReplies">✨ Sugerir respuestas con inteligencia artificial (Claude)</label><input id="aiReplies" type="checkbox"></div>
+          <p class="formhint">Al tocar «Responder», además de las respuestas listas aparecen otras pensadas para ese mensaje. Se envían a Claude solo los últimos mensajes de esa conversación, sin nombres ni teléfonos.</p>
+        </div>
         <p class="formhint">Solo se muestran y leen mensajes de personas conectadas. Si escribe alguien desconocido, aparece en el paso 4 para aprobarlo o ignorarlo.</p>
         <button id="tgDisconnect" type="button" class="clear wide danger">Desconectar Telegram</button>
       </div>
@@ -546,6 +550,6 @@
     </div>
   </dialog>
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
-  <script src="./app.js?v=1.0" defer></script>
+  <script src="./app.js?v=1.1" defer></script>
 </body>
 </html>

@@ -85,6 +85,64 @@ function addMessage(m) {
 }
 function touchPeople() { db.pv++; save(); wake(); }
 
+// ---------- Respuestas sugeridas con inteligencia artificial (opcional) ----------
+// Solo funciona si en Railway está la variable ANTHROPIC_API_KEY. Sin ella, la app usa sus respuestas por reglas.
+// Privacidad: a Claude se le mandan solo los últimos mensajes de esa conversación, sin nombres ni números de teléfono.
+let AnthropicSDK = null;
+try { AnthropicSDK = require('@anthropic-ai/sdk').default; } catch (e) { console.warn('@anthropic-ai/sdk no está instalado: sin sugerencias con IA.'); }
+const AI_KEY = (process.env.ANTHROPIC_API_KEY || '').trim();
+const AI_MODEL = (process.env.CLAUDE_MODEL || 'claude-opus-5-5').trim();
+// La reubicación automática ante un rechazo de seguridad está disponible en estos modelos.
+const AI_FALLBACKS = /^claude-(opus-5|opus-5-5|fable-5-1|sonnet-5-5)$/.test(AI_MODEL);
+const ai = AnthropicSDK && AI_KEY ? new AnthropicSDK({ apiKey: AI_KEY, timeout: 25000, maxRetries: 1 }) : null;
+const AI_SYSTEM = `Ayudás a una persona que no puede hablar ni escribir a responder mensajes de Telegram. Elige su respuesta tocando un botón grande, así que necesita opciones listas para mandar.
+
+Vas a recibir los últimos mensajes de una conversación entre esa persona ("Yo") y un familiar o amigo ("La otra persona"). Proponé 6 respuestas que "Yo" podría querer mandar al último mensaje de la otra persona.
+
+Cómo tienen que ser las respuestas:
+- En español rioplatense (con "vos"), en primera persona, dichas por "Yo".
+- Cortas: de 1 a 8 palabras.
+- Distintas entre sí, cubriendo opciones diferentes: por ejemplo sí y no, varias horas o días posibles, cómo se siente, pedir que le expliquen o dejarlo para después.
+- Si preguntan algo que solo "Yo" sabe (una hora, un lugar, una preferencia), ofrecé varias opciones posibles en vez de elegir una.
+- Naturales y cálidas, como hablaría una persona adulta con su familia. Sin emojis.
+- No respondas el mensaje vos: devolvé solamente las opciones.`;
+const suggestCache = new Map(); // «chatId:seq» → respuestas (para no volver a pagar si se abre dos veces)
+const aiCalls = [];
+async function suggestReplies(chatId) {
+  const thread = db.messages.filter(m => m.chatId === chatId).slice(-8);
+  const last = [...thread].reverse().find(m => m.dir === 'in');
+  if (!last) return { replies: [] };
+  const key = chatId + ':' + last.seq;
+  if (suggestCache.has(key)) return { replies: suggestCache.get(key), cached: true };
+  // Tope de gasto: como máximo 60 pedidos por hora.
+  const now = Date.now();
+  while (aiCalls.length && now - aiCalls[0] > 3600e3) aiCalls.shift();
+  if (aiCalls.length >= 60) throw Object.assign(new Error('limit'), { code: 'ai-limit' });
+  aiCalls.push(now);
+  const conversation = thread.map(m => (m.dir === 'in' ? 'La otra persona' : 'Yo') + ': ' + m.text.slice(0, 500)).join('\n');
+  const request = {
+    model: AI_MODEL,
+    max_tokens: 4000,
+    system: AI_SYSTEM,
+    output_config: {
+      effort: 'low', // tarea corta y simple: menos razonamiento, respuesta más rápida y barata
+      format: { type: 'json_schema', schema: { type: 'object', properties: { replies: { type: 'array', items: { type: 'string' } } }, required: ['replies'], additionalProperties: false } }
+    },
+    messages: [{ role: 'user', content: `Conversación (de la más vieja a la más nueva):\n${conversation}\n\nÚltimo mensaje para responder: «${last.text.slice(0, 500)}»` }]
+  };
+  if (AI_FALLBACKS) { request.betas = ['server-side-fallback-2026-07-01']; request.fallbacks = 'default'; }
+  const response = await ai.beta.messages.create(request);
+  if (response.stop_reason === 'refusal') { suggestCache.set(key, []); return { replies: [] }; }
+  const text = response.content.filter(b => b.type === 'text').map(b => b.text).join('');
+  let replies = [];
+  try { replies = JSON.parse(text).replies; } catch (e) { replies = []; }
+  replies = [...new Set((Array.isArray(replies) ? replies : []).filter(r => typeof r === 'string').map(r => r.trim()).filter(r => r && r.length <= 120))].slice(0, 6);
+  suggestCache.set(key, replies);
+  if (suggestCache.size > 200) suggestCache.delete(suggestCache.keys().next().value);
+  console.log(`Sugerencias con IA: ${replies.length} (modelo ${response.model}, ${response.usage.input_tokens} tokens de entrada + ${response.usage.output_tokens} de salida).`);
+  return { replies };
+}
+
 // ---------- Avisos push ----------
 function validSub(sub) {
   return !!(sub && typeof sub.endpoint === 'string' && /^https:\/\/[^\s]{10,800}$/.test(sub.endpoint) &&
@@ -284,7 +342,7 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === '/api/status' && req.method === 'GET') {
       const b = await getBot();
       if (!webhookOk) await ensureWebhook();
-      return send(res, 200, { ok: true, bot: b, botError, webhook: { ok: webhookOk, error: webhookError }, persistent: PERSISTENT, invite: db.invite, pushKey: db.vapid ? db.vapid.publicKey : '', pushDevices: db.pushSubs.length }, cors);
+      return send(res, 200, { ok: true, bot: b, botError, webhook: { ok: webhookOk, error: webhookError }, persistent: PERSISTENT, invite: db.invite, pushKey: db.vapid ? db.vapid.publicKey : '', pushDevices: db.pushSubs.length, ai: !!ai, aiModel: ai ? AI_MODEL : '' }, cors);
     }
 
     if (url.pathname === '/api/sync' && req.method === 'GET') {
@@ -300,7 +358,7 @@ const server = http.createServer(async (req, res) => {
         });
       }
       const messages = db.messages.filter(m => m.seq > since).slice(-500);
-      return send(res, 200, { seq: db.seq, pv: db.pv, reset, messages, people: publicPeople(), invite: db.invite }, cors);
+      return send(res, 200, { seq: db.seq, pv: db.pv, reset, messages, people: publicPeople(), invite: db.invite, ai: !!ai }, cors);
     }
 
     if (req.method === 'POST' && url.pathname.startsWith('/api/')) {
@@ -330,6 +388,18 @@ const server = http.createServer(async (req, res) => {
         }
         const delivered = linkPerson(chatId, name, { welcome: !body.migrate });
         return send(res, 200, { ok: true, delivered }, cors);
+      }
+      if (url.pathname === '/api/suggest') {
+        if (!ai) return send(res, 503, { error: 'ai-off' }, cors);
+        if (!person || person.status !== 'linked') return send(res, 404, { error: 'not-linked' }, cors);
+        try { return send(res, 200, { ok: true, ...(await suggestReplies(chatId)) }, cors); }
+        catch (e) {
+          if (e.code === 'ai-limit') return send(res, 429, { error: 'ai-limit' }, cors);
+          if (AnthropicSDK && e instanceof AnthropicSDK.AuthenticationError) { console.error('ANTHROPIC_API_KEY no es válida.'); return send(res, 502, { error: 'ai-bad-key' }, cors); }
+          if (AnthropicSDK && e instanceof AnthropicSDK.RateLimitError) return send(res, 429, { error: 'ai-busy' }, cors);
+          if (AnthropicSDK && e instanceof AnthropicSDK.APIError) { console.error('Error de la API de Claude:', e.status, e.message); return send(res, 502, { error: 'ai-error' }, cors); }
+          console.error('No se pudieron pedir sugerencias:', e.message); return send(res, 502, { error: 'ai-error' }, cors);
+        }
       }
       if (url.pathname === '/api/push/subscribe') {
         const sub = body.subscription;
@@ -383,6 +453,7 @@ server.listen(PORT, () => {
   else if (tokenProblem()) console.warn('Atención:', tokenProblem());
   else if (TOKEN !== RAW_TOKEN.trim()) console.log('TELEGRAM_TOKEN tenía espacios, comillas o «bot» delante: se corrigió automáticamente.');
   if (!PIN) console.warn('Falta HABLEMOS_PIN.');
+  console.log(ai ? `Sugerencias con IA activadas (modelo ${AI_MODEL}).` : 'Sugerencias con IA desactivadas (falta ANTHROPIC_API_KEY): se usan las respuestas por reglas.');
   getBot().then(() => ensureWebhook());
   // Reintenta el webhook cada minuto hasta que quede configurado.
   setInterval(() => { if (!webhookOk) ensureWebhook(); }, 60e3).unref();

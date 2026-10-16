@@ -1,6 +1,37 @@
-# Hablemos V1.0 — Crear conversaciones sin escribir
+# Hablemos V1.1 — Crear conversaciones sin escribir
 
 **Prototipo accesible para Android**. Diseñado para una persona que comprende texto y puede pulsar botones grandes, pero no puede hablar y tiene dificultad para escribir.
+
+## Cambios de la versión 1.1: respuestas sugeridas con inteligencia artificial (Claude)
+
+Al tocar «Responder», además de las respuestas por reglas aparecen **respuestas ✨ pensadas por Claude para ese mensaje**, aunque sea variado («¿Te viene bien que el kinesiólogo venga el jueves a las 11?» → «Sí, a las 11 me viene bien», «Mejor a la tarde», «¿Me pasás a buscar?»…).
+
+- **Es opcional.** Funciona solo si en Railway está la variable `ANTHROPIC_API_KEY`. Sin ella, todo sigue igual con las respuestas por reglas.
+- **Nunca deja a Diego sin opciones:** mientras la IA piensa («✨ Pensando respuestas…»), o si tarda o falla, las respuestas por reglas ya están disponibles.
+- Se puede apagar en ⚙ → Telegram → Opciones → «✨ Sugerir respuestas con inteligencia artificial».
+
+### Cómo activarlo
+
+1. Crear una cuenta en **https://platform.claude.com** (Anthropic), cargar crédito y crear una **API key**.
+2. En Railway → servicio **hablemos** → **Variables**, agregar `ANTHROPIC_API_KEY` con esa clave y tocar **Deploy**.
+3. Opcional: `CLAUDE_MODEL` para elegir el modelo. Por defecto es `claude-opus-5-5`, el más capaz. `claude-haiku-5-5` es mucho más económico y suele alcanzar para respuestas cortas.
+
+### Costo aproximado
+
+Cada sugerencia usa unos 500 tokens de entrada y 300 de salida. Calculado con 30 respuestas por día:
+
+| Modelo | Por sugerencia | Al mes |
+|---|---|---|
+| `claude-opus-5-5` (por defecto) | ~US$0,008 | ~US$7 |
+| `claude-haiku-5-5` | ~US$0,0002 | ~US$0,20 |
+
+Para no gastar de más: si se vuelve a abrir el mismo mensaje no se paga de nuevo, y hay un tope de 60 pedidos por hora. El registro de Railway muestra los tokens que usa cada pedido.
+
+### Privacidad
+
+- A Claude se le envían **solo los últimos 8 mensajes de esa conversación**, como «Yo» y «La otra persona»: **sin nombres ni teléfonos**. Los registros del servidor no guardan el texto de los mensajes.
+- Anthropic borra los datos de la API dentro de los 30 días y no los usa para entrenar modelos sin permiso. El contenido que sus sistemas de seguridad marcan puede guardarse hasta 2 años ([política de retención](https://privacy.anthropic.com/en/articles/7996866-how-long-do-you-store-personal-data)).
+- Si Claude rechaza un pedido por seguridad, el servidor intenta con otro modelo recomendado (`fallbacks: "default"`). Si igual no hay respuesta, quedan las respuestas por reglas.
 
 ## Cambios de la versión 1.0: respuestas sugeridas
 
@@ -75,6 +106,8 @@ Proyecto **reliable-gratitude**, servicio **hablemos** (repositorio `ideasDesign
 |---|---|
 | `TELEGRAM_TOKEN` | El token del bot que da @BotFather. |
 | `HABLEMOS_PIN` | El PIN que se escribe en la app. Conviene que tenga al menos 8 caracteres. |
+| `ANTHROPIC_API_KEY` | (Opcional) Clave de Claude para las respuestas sugeridas con IA. |
+| `CLAUDE_MODEL` | (Opcional) Modelo de Claude. Por defecto `claude-opus-5-5`. |
 
 Cada `git push` a `main` vuelve a publicar el servidor solo. Si se cambia el token con `/revoke`, solo hay que actualizar `TELEGRAM_TOKEN` en Railway.
 
@@ -186,8 +219,8 @@ Los datos (contactos, frases, palabras aprendidas) se guardan **solo en ese tel�
 
 ### Publicar una nueva versión
 
-1. Cambiar el nombre de la caché en `sw.js` (por ejemplo `hablemos-offline-v16` → `hablemos-offline-v17`), para actualizar la copia que se usa sin conexión.
-2. En `index.html`, cambiar la versión del script: `app.js?v=1.0` → `app.js?v=1.0.1`. **Si no se cambia, el navegador puede seguir usando el `app.js` anterior hasta 10 minutos.**
+1. Cambiar el nombre de la caché en `sw.js` (por ejemplo `hablemos-offline-v17` → `hablemos-offline-v18`), para actualizar la copia que se usa sin conexión.
+2. En `index.html`, cambiar la versión del script: `app.js?v=1.1` → `app.js?v=1.1.1`. **Si no se cambia, el navegador puede seguir usando el `app.js` anterior hasta 10 minutos.**
 3. Guardar los cambios con git y subirlos: `git commit -am "…"` y `git push`.
 4. En uno o dos minutos GitHub Pages publica la nueva versión. Con internet, la próxima vez que se abra Hablemos ya carga la nueva.
 
