@@ -1,0 +1,493 @@
+(() => {
+  'use strict';
+  const data = {
+    frecuentes: {label:'⭐ Frecuentes', phrases:[
+      ['💧','Tengo sed.'],['🍽️','Tengo hambre.'],['🚻','Necesito ir al baño.'],
+      ['🙋','¿Me podés ayudar, por favor?'],['🪑','Necesito cambiar de posición.'],
+      ['📞','Llamame, por favor.'],['✅','Sí.'],['❌','No.'],
+      ['⏳','Esperá un momento, por favor.'],['💬','Quiero conversar.']
+    ]},
+    cuidados: {label:'🧡 Cuidados', phrases:[
+      ['📱','¿Podés acercarme el teléfono?'],['🛌','Necesito descansar.'],
+      ['🥶','Tengo frío.'],['☀️','Tengo calor.'],['🤕','Tengo dolor. Necesito ayuda.'],
+      ['💊','Necesito ayuda con mi medicación.'],['↕️','No estoy en una posición cómoda.'],
+      ['🥤','¿Me podés traer agua?'],['🚪','¿Podés abrir la puerta?']
+    ]},
+    conversar: {label:'💬 Conversar', phrases:[
+      ['👋','Hola, ¿cómo estás?'],['🙏','Muchas gracias por tu ayuda.'],
+      ['❤️','Te quiero mucho.'],['☕','Contame cómo estuvo tu día.'],
+      ['🌳','Me gustaría salir un rato.'],['🎵','Me gustaría escuchar música.'],
+      ['❓','¿Podés explicármelo de otra manera?'],['🧑‍🤝‍🧑','Me gustaría recibir una visita.']
+    ]},
+    emociones: {label:'🙂 Cómo me siento', phrases:[
+      ['😊','Me siento bien.'],['😔','Estoy triste.'],['😟','Estoy preocupado.'],
+      ['😴','Estoy cansado.'],['😨','Tengo miedo.'],['😠','Estoy enojado.'],
+      ['💛','Quiero agradecerte algo.'],['🌿','Necesito estar a solas un momento.']
+    ]},
+    respuestas: {label:'✅ Respuestas', phrases:[
+      ['✅','Sí.'],['❌','No.'],['🤔','Tal vez.'],['👂','No entendí.'],
+      ['🔁','¿Podés repetirlo?'],['👍','De acuerdo.'],['💭','Prefiero otra cosa.'],
+      ['⌛','Ahora no, mejor después.'],['🛑','No quiero hacer eso.']
+    ]},
+    propias: {label:'✏️ Mis frases', phrases:[]}
+  };
+  const $ = id => document.getElementById(id);
+  const builderCategories = {
+    inicio: {label:'1 · Inicio', entries:['Quiero','Necesito','Me gustaría','No quiero','Prefiero','Tengo','Me siento','Hoy quiero','¿Podés','¿Me ayudás a','¿Cuándo podemos','Gracias por']},
+    acciones: {label:'2 · Acciones', entries:['hablar','comer','descansar','salir','ir','ver','escuchar música','tomar','llamar','jugar','decir algo','que vengas','que me llames','venir a verme','ayudarme','explicarme','acompañarme','contarte algo']},
+    detalles: {label:'3 · Detalles', entries:['sed','hambre','frío','calor','dolor','sueño','un vaso de agua','un café','algo para comer','al baño','al médico','a casa','a pasear','al patio','mi teléfono','la televisión','un momento','un poco más','otro día','por favor','porque estoy cansado','porque lo necesito']},
+    personas: {label:'👥 Personas', entries:['con mi hermana','con mi hermano','con mi mamá','con mi papá','con mi familia','con vos','con mis amigos','con mi hija','con mi hijo','con mi cuidador','a mi hermana','a mi hermano','a vos','a mi familia']},
+    tiempo: {label:'🕒 Tiempo', entries:['ahora','hoy','mañana','esta tarde','esta noche','después','más tarde','el fin de semana','cuando puedas','por un rato']},
+    sentimientos: {label:'❤️ Sentimientos', entries:['bien','mal','triste','contento','cansado','preocupado','tranquilo','solo','acompañado','con miedo','con dolor','mejor']},
+    preguntas: {label:'❓ Preguntas', entries:['¿Cómo estás','¿Podemos hablar','¿Podés venir','¿Me escuchás','¿Qué te parece','¿Cuándo nos vemos','¿Tenés un momento','¿Dónde está','¿Me explicás','¿Querés conversar']},
+    respuestas: {label:'✅ Respuestas', entries:['Sí','No','Tal vez','No entendí','De acuerdo','No estoy de acuerdo','Muchas gracias','Te quiero','Lo siento','Prefiero otra cosa','Contame más','Repetilo, por favor']},
+    propias: {label:'✏️ Mis palabras', entries:[]}
+  };
+  // V0.3: sugerencias base para la siguiente palabra. '^' = comienzo del mensaje.
+  const nextWords = {
+    '^':['Quiero','Necesito','Tengo','Me siento','¿Podés','Me gustaría'],
+    'Quiero':['hablar','descansar','salir','comer','escuchar música','ir'],
+    'Necesito':['ir','descansar','hablar','tomar','un vaso de agua','que vengas'],
+    'Me gustaría':['hablar','salir','ir','ver','escuchar música','que vengas'],
+    'No quiero':['comer','salir','ir','hablar','descansar','ahora'],
+    'Prefiero':['descansar','hablar','salir','más tarde','otro día','después'],
+    'Tengo':['sed','hambre','frío','calor','dolor','sueño'],
+    'Me siento':['bien','mal','cansado','triste','contento','preocupado'],
+    'Hoy quiero':['salir','descansar','hablar','ver','escuchar música','jugar'],
+    '¿Podés':['ayudarme','venir a verme','acompañarme','explicarme'],
+    '¿Me ayudás a':['ir','comer','tomar','salir','descansar','llamar'],
+    '¿Cuándo podemos':['hablar','salir','jugar','ir','ver'],
+    'Gracias por':['ayudarme','venir a verme','acompañarme','explicarme'],
+    'hablar':['con mi hermana','con mi mamá','con mi familia','con vos','ahora','mañana'],
+    'llamar':['a mi hermana','a mi hermano','a mi familia','a vos','ahora','más tarde'],
+    'ir':['al baño','al médico','a casa','a pasear','al patio'],
+    'salir':['a pasear','al patio','por un rato','esta tarde','con mi familia','hoy'],
+    'comer':['algo para comer','ahora','más tarde','con mi familia','un poco más'],
+    'tomar':['un vaso de agua','un café','ahora','por favor'],
+    'ver':['la televisión','a mi familia','a mi hermana','a mi hermano'],
+    'escuchar música':['ahora','por un rato','con vos','esta tarde'],
+    'descansar':['un momento','por un rato','ahora','porque estoy cansado','esta noche'],
+    'jugar':['con vos','con mis amigos','esta tarde','por un rato'],
+    'decir algo':['a mi hermana','a mi familia','a vos','ahora'],
+    'contarte algo':['ahora','cuando puedas','hoy'],
+    'que vengas':['ahora','hoy','mañana','esta tarde','cuando puedas','por favor'],
+    'que me llames':['ahora','hoy','más tarde','esta noche','cuando puedas'],
+    'venir a verme':['hoy','mañana','esta tarde','el fin de semana','cuando puedas'],
+    'ayudarme':['por favor','ahora','un momento'],
+    'acompañarme':['al médico','a pasear','al patio','a casa','por un rato'],
+    'dolor':['ahora','un poco más','porque lo necesito'],
+    'sed':['por favor','un vaso de agua'],
+    'hambre':['algo para comer','por favor'],
+    'un vaso de agua':['por favor','ahora'],
+    'un café':['por favor','ahora','más tarde'],
+    'al baño':['ahora','por favor'],
+    'al médico':['mañana','hoy','cuando puedas'],
+    'cansado':['hoy','ahora'],
+    'triste':['hoy','ahora'],
+    'preocupado':['hoy','ahora']
+  };
+  // Si la última palabra no tiene sugerencias propias, se usa su categoría.
+  const nextByCategory = {
+    acciones:['ahora','hoy','por favor','con vos','cuando puedas','mañana'],
+    detalles:['por favor','ahora','un momento'],
+    personas:['ahora','hoy','mañana','esta tarde','cuando puedas','el fin de semana'],
+    tiempo:['por favor','con vos','con mi familia'],
+    sentimientos:['hoy','ahora','porque estoy cansado'],
+    preguntas:['hoy','ahora','mañana','esta tarde','con vos'],
+    respuestas:['por favor','Muchas gracias']
+  };
+  const START='^';
+  const holdOptions=[0,500,1000,1500,2000];
+  const repeatOptions=[0,500,1000,2000];
+  const initial = {contacts:[],selectedContactId:null,ownPhrases:[],message:'',category:'frecuentes',combine:false,large:false,contrast:false,
+    tokens:[],punctuation:'.',buildCategory:'inicio',savedMessages:[],customBlocks:[],mode:'build',
+    suggest:true,learned:{},voiceURI:'',rate:.9,pitch:1,volume:1,holdMs:0,repeatMs:0};
+  const clampNumber=(value,min,max,fallback)=>typeof value==='number'&&isFinite(value)?Math.min(max,Math.max(min,value)):fallback;
+  let state = {...initial};
+  function loadStored(key) {
+    try {
+      const value = JSON.parse(localStorage.getItem(key));
+      return value && typeof value === 'object' && !Array.isArray(value) ? value : null;
+    } catch(e){return null;}
+  }
+  const stored = loadStored('hablemos.v3') || loadStored('hablemos.v2') || loadStored('hablemos.v1');
+  if(stored) {
+    if(Array.isArray(stored.contacts)) state.contacts=stored.contacts.filter(x=>x&&typeof x.name==='string'&&typeof x.phone==='string'&&typeof x.id==='string').slice(0,50).map(x=>({id:x.id,name:x.name.slice(0,36),phone:x.phone.replace(/\D/g,'')}));
+    if(Array.isArray(stored.ownPhrases)) state.ownPhrases=stored.ownPhrases.filter(x=>typeof x==='string'&&x.length<=200).slice(0,100);
+    if(typeof stored.message==='string')state.message=stored.message.slice(0,1000);
+    if(typeof stored.selectedContactId==='string')state.selectedContactId=stored.selectedContactId;
+    if(data[stored.category])state.category=stored.category;
+    state.combine=!!stored.combine;state.large=!!stored.large;state.contrast=!!stored.contrast;
+    if(Array.isArray(stored.tokens))state.tokens=stored.tokens.filter(x=>typeof x==='string'&&x.length<=80).slice(0,40);
+    if(['.','?','!'].includes(stored.punctuation))state.punctuation=stored.punctuation;
+    if(builderCategories[stored.buildCategory])state.buildCategory=stored.buildCategory;
+    if(Array.isArray(stored.customBlocks))state.customBlocks=stored.customBlocks.filter(x=>typeof x==='string'&&x.trim()&&x.length<=80).slice(0,80);
+    if(Array.isArray(stored.savedMessages))state.savedMessages=stored.savedMessages.filter(x=>typeof x==='string'&&x.trim()&&x.length<=1000).slice(0,60);
+    if(['build','quick','saved'].includes(stored.mode))state.mode=stored.mode;
+    if(typeof stored.suggest==='boolean')state.suggest=stored.suggest;
+    if(stored.learned&&typeof stored.learned==='object'&&!Array.isArray(stored.learned)){
+      const learned={};
+      for(const [prev,nexts] of Object.entries(stored.learned).slice(0,400)){
+        if(prev.length>80||!nexts||typeof nexts!=='object'||Array.isArray(nexts))continue;
+        const clean={};
+        for(const [word,count] of Object.entries(nexts).slice(0,40)){
+          if(word.length<=80&&Number.isInteger(count)&&count>0)clean[word]=Math.min(count,999);
+        }
+        if(Object.keys(clean).length)learned[prev]=clean;
+      }
+      state.learned=learned;
+    }
+    if(typeof stored.voiceURI==='string')state.voiceURI=stored.voiceURI.slice(0,300);
+    state.rate=clampNumber(stored.rate,.5,1.5,state.rate);
+    state.pitch=clampNumber(stored.pitch,.5,1.5,state.pitch);
+    state.volume=clampNumber(stored.volume,.1,1,state.volume);
+    if(holdOptions.includes(stored.holdMs))state.holdMs=stored.holdMs;
+    if(repeatOptions.includes(stored.repeatMs))state.repeatMs=stored.repeatMs;
+  }
+  function persist(){try{localStorage.setItem('hablemos.v3',JSON.stringify(state));}catch(e){notify('No hay espacio para guardar preferencias.');}}
+  let toastTimer;
+  function notify(msg){const t=$('toast');t.textContent=msg;t.hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>{t.hidden=true;},3000);}
+  function updateMessage(s, preserveTokens=false){
+    state.message=s.slice(0,1000);$('message').value=state.message;
+    if(!preserveTokens){state.tokens=[];renderTokens();}
+    persist();
+  }
+  function setMode(mode){
+    state.mode=mode;
+    for(const m of ['build','quick','saved']){
+      const tab=$({build:'tabBuild',quick:'tabQuick',saved:'tabSaved'}[m]);
+      const panel=$({build:'builderPanel',quick:'quickPanel',saved:'savedPanel'}[m]);
+      const active=m===mode;
+      panel.hidden=!active;
+      if(active)tab.setAttribute('aria-current','page');else tab.removeAttribute('aria-current');
+    }
+    if(mode==='saved')renderSaved();
+    persist();
+  }
+  function composeTokens(){
+    if(!state.tokens.length)return '';
+    let s=state.tokens.join(' ').replace(/\s+/g,' ').trim();
+    if(!s)return '';
+    if(state.punctuation==='.' && (s.startsWith('¿')||s.startsWith('¡')))s=s.slice(1);
+    if(state.punctuation==='?' && !s.startsWith('¿'))s='¿'+s.replace(/^¡/,'');
+    if(state.punctuation==='!' && !s.startsWith('¡'))s='¡'+s.replace(/^¿/,'');
+    s=s.replace(/[.!?]+$/g,'');
+    return s+state.punctuation;
+  }
+  function updateBuilt(){updateMessage(composeTokens(),true);renderTokens();renderPunctuation();}
+  function addBlock(word){
+    if(state.tokens.length>=40){notify('Mensaje demasiado largo.');return;}
+    state.tokens.push(word);
+    if(state.tokens.length===1)state.punctuation=word.startsWith('¿')?'?':word.startsWith('¡')?'!':'.';
+    if(composeTokens().length>1000){state.tokens.pop();notify('El mensaje llegó al máximo de 1000 caracteres.');return;}
+    updateBuilt();
+    if(state.tokens.length===1 && word==='Me siento')state.buildCategory='sentimientos';
+    else if(state.tokens.length===1 && word==='Tengo')state.buildCategory='detalles';
+    else if(state.tokens.length===1 && ['inicio','preguntas'].includes(state.buildCategory))state.buildCategory='acciones';
+    else if(state.tokens.length===2 && state.buildCategory==='acciones')state.buildCategory='personas';
+    else if(state.tokens.length===3 && state.buildCategory==='personas')state.buildCategory='tiempo';
+    renderBuildCategories();renderBuildTiles();
+  }
+  function renderTokens(){
+    const root=$('tokens');root.replaceChildren();
+    $('undoBtn').disabled=state.tokens.length===0;
+    renderSuggestions();
+    if(!state.tokens.length){const hint=document.createElement('span');hint.className='muted';hint.textContent='Tocá un botón para empezar. También podés probar el ejemplo.';root.append(hint);return;}
+    state.tokens.forEach((part,i)=>{
+      const b=document.createElement('button');b.className='token';b.type='button';b.textContent=part+'  ×';
+      b.title='Quitar '+part;b.setAttribute('aria-label','Quitar parte '+(i+1)+': '+part);
+      b.addEventListener('click',()=>{state.tokens.splice(i,1);updateBuilt();});root.append(b);
+    });
+  }
+  function renderPunctuation(){
+    document.querySelectorAll('[data-punctuation]').forEach(btn=>{
+      btn.setAttribute('aria-pressed',String(btn.dataset.punctuation===state.punctuation));
+    });
+  }
+  function renderBuildCategories(){
+    const root=$('buildCategories');root.replaceChildren();
+    for(const [key,meta] of Object.entries(builderCategories)){
+      const b=document.createElement('button');b.type='button';b.className='category';b.role='tab';b.textContent=meta.label;
+      b.setAttribute('aria-selected',String(state.buildCategory===key));
+      b.addEventListener('click',()=>{state.buildCategory=key;renderBuildCategories();renderBuildTiles();persist();});root.append(b);
+    }
+    $('stepHint').textContent=state.tokens.length ? 'También podés cambiar de categoría' : 'Empezá por «Inicio»';
+  }
+  function renderBuildTiles(){
+    const root=$('buildTiles');root.replaceChildren();
+    const entries=state.buildCategory==='propias'?state.customBlocks:builderCategories[state.buildCategory].entries;
+    for(const word of entries){
+      const b=document.createElement('button');b.type='button';b.className='phrase';b.textContent=word;
+      b.setAttribute('aria-label','Agregar al mensaje: '+word);b.addEventListener('click',()=>addBlock(word));root.append(b);
+    }
+    if(state.buildCategory==='propias'&&!entries.length){const p=document.createElement('p');p.className='muted';p.textContent='Todavía no hay palabras personalizadas. Podés crear una abajo.';root.append(p);}
+  }
+  function categoryOf(word){
+    for(const [key,meta] of Object.entries(builderCategories))if(meta.entries.includes(word))return key;
+    return state.customBlocks.includes(word)?'propias':null;
+  }
+  function getSuggestions(){
+    const prev=state.tokens.length?state.tokens[state.tokens.length-1]:START;
+    const used=new Set(state.tokens);
+    const learned=Object.entries(state.learned[prev]||{}).sort((a,b)=>b[1]-a[1]).map(([word])=>word);
+    const base=nextWords[prev]||nextByCategory[categoryOf(prev)]||['por favor','ahora','hoy'];
+    const result=[];
+    for(const word of learned)if(!used.has(word)&&result.length<4)result.push({word,learned:true});
+    for(const word of base)if(!used.has(word)&&!result.some(x=>x.word===word)&&result.length<6)result.push({word,learned:false});
+    return result;
+  }
+  function renderSuggestions(){
+    const box=$('suggestBox');box.hidden=!state.suggest;
+    if(!state.suggest)return;
+    const root=$('suggestions');root.replaceChildren();
+    $('suggestTitle').textContent=state.tokens.length?'💡 Para seguir':'💡 Para empezar';
+    const list=getSuggestions();
+    if(!list.length){const p=document.createElement('p');p.className='muted';p.textContent='Elegí una palabra de las categorías de abajo.';root.append(p);return;}
+    for(const {word,learned} of list){
+      const b=document.createElement('button');b.type='button';b.className='suggestion'+(learned?' learned':'');b.textContent=word;
+      b.setAttribute('aria-label','Agregar sugerencia'+(learned?' usada antes':'')+': '+word);
+      b.addEventListener('click',()=>addBlock(word));root.append(b);
+    }
+  }
+  // Aprende el orden de las palabras solo cuando el mensaje se usa (hablar, enviar o guardar).
+  let lastLearned='';
+  function learnFromMessage(){
+    if(!state.tokens.length||state.message!==composeTokens())return;
+    const key=state.tokens.join('\u0001');
+    if(key===lastLearned)return;
+    lastLearned=key;
+    let prev=START;
+    for(const word of state.tokens){
+      if(!state.learned[prev]){
+        if(Object.keys(state.learned).length>=400){prev=word;continue;}
+        state.learned[prev]={};
+      }
+      const nexts=state.learned[prev];
+      if(!(word in nexts)&&Object.keys(nexts).length>=40){
+        const weakest=Object.entries(nexts).sort((a,b)=>a[1]-b[1])[0][0];delete nexts[weakest];
+      }
+      nexts[word]=Math.min((nexts[word]||0)+1,999);
+      prev=word;
+    }
+    persist();
+  }
+  function selectPhrase(phrase){
+    const current=state.message.trim();const s=state.combine&&current?current+' '+phrase:phrase;
+    updateMessage(s);notify('Mensaje preparado');
+  }
+  function renderCategories(){
+    const root=$('categories');root.replaceChildren();
+    for(const [key,val] of Object.entries(data)){
+      const b=document.createElement('button');b.type='button';b.className='category';b.role='tab';b.textContent=val.label;
+      b.setAttribute('aria-selected',String(state.category===key));
+      b.addEventListener('click',()=>{state.category=key;persist();renderCategories();renderPhrases();});root.append(b);
+    }
+  }
+  function renderPhrases(){
+    const root=$('phrases');root.replaceChildren();
+    const entries=state.category==='propias'?state.ownPhrases.map(x=>['🗣️',x]):data[state.category].phrases;
+    for(const [emoji,phrase] of entries){
+      const b=document.createElement('button');b.className='phrase';b.type='button';b.setAttribute('aria-label','Preparar mensaje: '+phrase);
+      const e=document.createElement('span');e.className='emoji';e.textContent=emoji;e.setAttribute('aria-hidden','true');
+      const label=document.createElement('span');label.textContent=phrase;
+      b.append(e,label);b.addEventListener('click',()=>selectPhrase(phrase));root.append(b);
+    }
+    if(state.category==='propias'){
+      const b=document.createElement('button');b.className='phrase add-phrase';b.type='button';b.textContent='＋ Crear una frase';
+      b.addEventListener('click',()=>$('phraseDialog').showModal());root.append(b);
+    }
+  }
+  function renderSaved(){
+    const root=$('savedList');root.replaceChildren();
+    if(!state.savedMessages.length){const p=document.createElement('p');p.className='muted';p.textContent='Aún no guardaste ningún mensaje. Escribí uno con los botones y tocá «Guardar esta frase».';root.append(p);return;}
+    for(const m of state.savedMessages){
+      const row=document.createElement('div');row.className='saved-row';
+      const b=document.createElement('button');b.type='button';b.className='saved-pick';b.textContent=m;b.setAttribute('aria-label','Usar mensaje guardado: '+m);
+      b.addEventListener('click',()=>{updateMessage(m);setMode('build');notify('Frase guardada lista para hablar o enviar');window.scrollTo({top:0,behavior:'smooth'});});
+      const del=document.createElement('button');del.type='button';del.className='saved-delete';del.textContent='✕';del.setAttribute('aria-label','Eliminar mensaje guardado');
+      del.addEventListener('click',()=>{if(!window.confirm('¿Eliminar este mensaje guardado?'))return;state.savedMessages=state.savedMessages.filter(x=>x!==m);persist();renderSaved();});
+      row.append(b,del);root.append(row);
+    }
+  }
+  function selected(){return state.contacts.find(c=>c.id===state.selectedContactId)||null;}
+  function renderSelectedContact(){
+    const c=selected();$('contactName').textContent=c?c.name:'Elegir contacto';
+    $('contactHint').textContent=c?'Tocar para cambiar':'Agregá un contacto de confianza';
+    $('contactAvatar').textContent=c?c.name.trim().charAt(0).toLocaleUpperCase('es'):'+';
+  }
+  function renderContactList(){
+    const root=$('contactsList');root.replaceChildren();
+    if(!state.contacts.length){const p=document.createElement('p');p.className='muted';p.textContent='No hay contactos guardados todavía.';root.append(p);return;}
+    for(const c of state.contacts){
+      const row=document.createElement('div');row.className='contactline';
+      const b=document.createElement('button');b.type='button';b.className='pick';
+      const title=document.createElement('strong');title.textContent=(state.selectedContactId===c.id?'✓ ':'')+c.name;
+      const sub=document.createElement('small');sub.textContent='+'+c.phone;b.append(title,sub);
+      b.addEventListener('click',()=>{state.selectedContactId=c.id;persist();renderSelectedContact();$('contactsDialog').close();notify('Contacto elegido: '+c.name);});
+      const del=document.createElement('button');del.type='button';del.className='delete';del.textContent='✕';del.setAttribute('aria-label','Eliminar '+c.name);
+      del.addEventListener('click',()=>{if(!window.confirm('¿Eliminar a '+c.name+' de tus contactos?'))return;state.contacts=state.contacts.filter(x=>x.id!==c.id);if(state.selectedContactId===c.id)state.selectedContactId=null;persist();renderContactList();renderSelectedContact();});
+      row.append(b,del);root.append(row);
+    }
+  }
+  const hasVoice=()=>'speechSynthesis' in window&&'SpeechSynthesisUtterance' in window;
+  function spanishVoices(){
+    if(!hasVoice())return [];
+    const voices=window.speechSynthesis.getVoices();
+    const spanish=voices.filter(v=>v.lang.toLowerCase().startsWith('es'));
+    const rank=v=>v.lang.toLowerCase().replace('_','-')==='es-ar'?0:/^es[-_](419|us|mx|uy|cl|co)/i.test(v.lang)?1:2;
+    return (spanish.length?spanish:voices).slice().sort((a,b)=>rank(a)-rank(b)||a.name.localeCompare(b.name));
+  }
+  function pickVoice(){
+    const voices=spanishVoices();
+    return voices.find(v=>v.voiceURI===state.voiceURI)||voices.find(v=>v.lang.toLowerCase().replace('_','-')==='es-ar')||voices.find(v=>v.lang.toLowerCase().startsWith('es'))||null;
+  }
+  function talk(phrase){
+    const m=(phrase||'').trim();if(!m){notify('Primero prepará un mensaje.');return;}
+    if(!hasVoice()){notify('Este navegador no tiene voz disponible.');return;}
+    try{
+      window.speechSynthesis.cancel();const utterance=new SpeechSynthesisUtterance(m);
+      const voice=pickVoice();
+      utterance.lang=voice?voice.lang:'es-AR';if(voice)utterance.voice=voice;
+      utterance.rate=state.rate;utterance.pitch=state.pitch;utterance.volume=state.volume;
+      window.speechSynthesis.speak(utterance);
+    }catch(e){notify('No se pudo usar la voz en este dispositivo.');}
+  }
+  function speakMessage(){learnFromMessage();talk(state.message);}
+  function renderVoiceSettings(){
+    const select=$('voiceSelect');select.replaceChildren();
+    const auto=document.createElement('option');auto.value='';auto.textContent='Automática (español)';select.append(auto);
+    for(const v of spanishVoices()){
+      const o=document.createElement('option');o.value=v.voiceURI;o.textContent=v.name+' · '+v.lang+(v.localService?'':' (necesita internet)');select.append(o);
+    }
+    select.value=spanishVoices().some(v=>v.voiceURI===state.voiceURI)?state.voiceURI:'';
+    $('voiceRate').value=state.rate;$('voicePitch').value=state.pitch;$('voiceVolume').value=state.volume;
+    $('rateValue').textContent=state.rate<.8?'lenta':state.rate>1.1?'rápida':'normal';
+    $('pitchValue').textContent=state.pitch<.85?'grave':state.pitch>1.15?'aguda':'normal';
+    $('volumeValue').textContent=Math.round(state.volume*100)+'%';
+    $('noVoice').hidden=hasVoice();
+  }
+  function sendWhatsApp(){
+    const msg=state.message.trim();if(!msg){notify('Primero prepará un mensaje.');return;}
+    const c=selected();if(!c){renderContactList();$('contactsDialog').showModal();notify('Elegí o agregá un contacto.');return;}
+    const num=c.phone.replace(/\D/g,'');if(!/^\d{8,15}$/.test(num)){notify('Revisá el número internacional.');return;}
+    learnFromMessage();
+    window.location.href='https://wa.me/'+num+'?text='+encodeURIComponent(msg);
+  }
+  function updateOffline(){$('offline').hidden=navigator.onLine;}
+  function updatePrefs(){
+    document.body.classList.toggle('large',state.large);document.body.classList.toggle('contrast',state.contrast);
+    $('largerText').checked=state.large;$('highContrast').checked=state.contrast;
+    $('suggestToggle').checked=state.suggest;
+    $('holdSelect').value=String(state.holdMs);$('repeatSelect').value=String(state.repeatMs);
+    document.body.classList.toggle('hold-on',state.holdMs>0);
+    document.body.style.setProperty('--hold',state.holdMs+'ms');
+    const tips=[];
+    if(state.holdMs)tips.push('Mantené presionado cada botón '+(state.holdMs/1000).toLocaleString('es-AR')+' s para elegirlo.');
+    if(state.repeatMs)tips.push('Los toques repetidos se ignoran durante '+(state.repeatMs/1000).toLocaleString('es-AR')+' s.');
+    $('touchHint').textContent=tips.join(' ');$('touchHint').hidden=!tips.length;
+  }
+  // V0.3: protección de toques. Solo afecta a los botones del tablero, no a los formularios de configuración.
+  const boardButton=target=>{const b=target instanceof Element?target.closest('button'):null;return b&&!b.closest('dialog')?b:null;};
+  let holdTimer=null,holdBtn=null,holdStart=null,lastAccepted=0;
+  function cancelHold(){clearTimeout(holdTimer);holdTimer=null;if(holdBtn)holdBtn.classList.remove('holding');holdBtn=null;}
+  document.addEventListener('pointerdown',e=>{
+    if(!state.holdMs||e.button>0)return;
+    const b=boardButton(e.target);if(!b||b.disabled)return;
+    cancelHold();holdBtn=b;holdStart={x:e.clientX,y:e.clientY};
+    void b.offsetWidth;b.classList.add('holding');
+    holdTimer=setTimeout(()=>{
+      const btn=holdBtn;cancelHold();
+      try{if(navigator.vibrate)navigator.vibrate(30);}catch(err){}
+      btn.click();
+    },state.holdMs);
+  });
+  document.addEventListener('pointermove',e=>{
+    if(holdBtn&&holdStart&&Math.hypot(e.clientX-holdStart.x,e.clientY-holdStart.y)>14)cancelHold();
+  });
+  for(const type of ['pointerup','pointercancel'])document.addEventListener(type,cancelHold);
+  document.addEventListener('contextmenu',e=>{if(state.holdMs&&boardButton(e.target))e.preventDefault();});
+  document.addEventListener('click',e=>{
+    const b=boardButton(e.target);if(!b)return;
+    // Con «mantener presionado», el toque corto no elige. El teclado y los pulsadores (detail 0) siguen funcionando.
+    if(state.holdMs&&e.detail>0){
+      e.preventDefault();e.stopImmediatePropagation();
+      if($('toast').hidden)notify('Mantené presionado el botón hasta que se complete la barra.');
+      return;
+    }
+    if(state.repeatMs){
+      const now=Date.now();
+      if(now-lastAccepted<state.repeatMs){e.preventDefault();e.stopImmediatePropagation();return;}
+      lastAccepted=now;
+    }
+  },true);
+  $('message').value=state.message;$('combine').checked=state.combine;
+  $('message').addEventListener('input',e=>{state.message=e.target.value.slice(0,1000);if(state.tokens.length){state.tokens=[];renderTokens();}persist();});
+  $('combine').addEventListener('change',e=>{state.combine=e.target.checked;persist();notify(state.combine?'Podés combinar frases rápidas':'Una frase rápida reemplaza al mensaje');});
+  $('clearBtn').addEventListener('click',()=>{updateMessage('');state.punctuation='.';renderPunctuation();notify('Mensaje borrado');});
+  $('speakBtn').addEventListener('click',speakMessage);
+  $('whatsBtn').addEventListener('click',sendWhatsApp);
+  $('builderSpeakBtn').addEventListener('click',speakMessage);
+  $('builderWhatsBtn').addEventListener('click',sendWhatsApp);
+  $('saveBtn').addEventListener('click',()=>{
+    const m=state.message.trim();if(!m){notify('Prepará un mensaje antes de guardarlo.');return;}
+    learnFromMessage();
+    if(state.savedMessages.includes(m)){notify('Este mensaje ya está guardado.');return;}
+    state.savedMessages.unshift(m);state.savedMessages=state.savedMessages.slice(0,60);persist();notify('Mensaje guardado para otra ocasión');
+  });
+  $('helpBtn').addEventListener('click',()=>{const msg='Necesito ayuda ahora. Por favor, vení.';updateMessage(msg);talk(msg);notify('La solicitud de ayuda está preparada. No se envió automáticamente.');});
+  $('contactOpen').addEventListener('click',()=>{renderContactList();$('contactsDialog').showModal();});
+  $('settingsOpen').addEventListener('click',()=>$('settingsDialog').showModal());
+  $('tabBuild').addEventListener('click',()=>setMode('build'));
+  $('tabQuick').addEventListener('click',()=>setMode('quick'));
+  $('tabSaved').addEventListener('click',()=>setMode('saved'));
+  $('exampleBtn').addEventListener('click',()=>{state.tokens=['Quiero','hablar','con mi hermana'];state.punctuation='.';state.buildCategory='tiempo';updateBuilt();renderBuildCategories();renderBuildTiles();notify('Ejemplo listo. Tocá una parte para quitarla.');});
+  $('undoBtn').addEventListener('click',()=>{if(!state.tokens.length)return;state.tokens.pop();updateBuilt();});
+  document.querySelectorAll('[data-punctuation]').forEach(btn=>btn.addEventListener('click',()=>{state.punctuation=btn.dataset.punctuation;if(state.tokens.length)updateBuilt();else{renderPunctuation();persist();}}));
+  $('ownBlockBtn').addEventListener('click',()=>$('blockDialog').showModal());
+  $('blockForm').addEventListener('submit',e=>{
+    e.preventDefault();const word=$('newBlock').value.trim().replace(/\s+/g,' ');if(!word)return;
+    if(state.customBlocks.length>=80){notify('Se alcanzó el máximo de 80 bloques personalizados.');return;}
+    if(state.customBlocks.includes(word)){notify('Esta palabra ya está guardada.');return;}
+    state.customBlocks.push(word);state.buildCategory='propias';$('newBlock').value='';$('blockDialog').close();renderBuildCategories();renderBuildTiles();persist();notify('Bloque creado. Ya podés agregarlo.');
+  });
+  $('largerText').addEventListener('change',e=>{state.large=e.target.checked;updatePrefs();persist();});
+  $('highContrast').addEventListener('change',e=>{state.contrast=e.target.checked;updatePrefs();persist();});
+  $('settingsOpen').addEventListener('click',renderVoiceSettings);
+  $('suggestToggle').addEventListener('change',e=>{state.suggest=e.target.checked;renderSuggestions();persist();});
+  $('forgetLearned').addEventListener('click',()=>{
+    if(!Object.keys(state.learned).length){notify('Todavía no hay palabras aprendidas.');return;}
+    if(!window.confirm('¿Olvidar el orden de palabras aprendido? Las sugerencias base se mantienen.'))return;
+    state.learned={};lastLearned='';renderSuggestions();persist();notify('Sugerencias aprendidas borradas');
+  });
+  $('voiceSelect').addEventListener('change',e=>{state.voiceURI=e.target.value;persist();});
+  for(const [id,key] of [['voiceRate','rate'],['voicePitch','pitch'],['voiceVolume','volume']]){
+    $(id).addEventListener('input',e=>{state[key]=Number(e.target.value);renderVoiceSettings();persist();});
+  }
+  $('voiceTest').addEventListener('click',()=>talk('Hola, esta es mi voz. ¿Me escuchás bien?'));
+  $('voiceReset').addEventListener('click',()=>{state.voiceURI='';state.rate=initial.rate;state.pitch=initial.pitch;state.volume=initial.volume;renderVoiceSettings();persist();notify('Voz restablecida');});
+  $('holdSelect').addEventListener('change',e=>{state.holdMs=Number(e.target.value);cancelHold();updatePrefs();persist();});
+  $('repeatSelect').addEventListener('change',e=>{state.repeatMs=Number(e.target.value);updatePrefs();persist();});
+  if(hasVoice()&&'onvoiceschanged' in window.speechSynthesis)window.speechSynthesis.addEventListener('voiceschanged',()=>{if($('settingsDialog').open)renderVoiceSettings();});
+  document.querySelectorAll('[data-close]').forEach(b=>b.addEventListener('click',()=>$(b.dataset.close).close()));
+  $('contactForm').addEventListener('submit',e=>{
+    e.preventDefault();const name=$('newContactName').value.trim().replace(/\s+/g,' ');const phone=$('newContactPhone').value.replace(/\D/g,'');
+    const error=$('contactError');error.hidden=true;
+    if(!name||phone.length<8||phone.length>15||!/^[0-9]+$/.test(phone)){error.textContent='Ingresá nombre y teléfono internacional válido (8 a 15 dígitos).';error.hidden=false;return;}
+    if(state.contacts.some(c=>c.phone===phone)){error.textContent='El teléfono ya está guardado.';error.hidden=false;return;}
+    if(state.contacts.length>=50){error.textContent='Se alcanzó el máximo de contactos.';error.hidden=false;return;}
+    const id=Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,8);
+    state.contacts.push({id,name,phone});state.selectedContactId=id;persist();renderSelectedContact();renderContactList();
+    $('newContactName').value='';$('newContactPhone').value='';$('contactsDialog').close();notify('Contacto guardado: '+name);
+  });
+  $('phraseForm').addEventListener('submit',e=>{
+    e.preventDefault();const s=$('newPhrase').value.trim();if(!s)return;
+    if(state.ownPhrases.length>=100){notify('Llegaste al máximo de frases personales.');return;}
+    state.ownPhrases.push(s);state.category='propias';persist();renderCategories();renderPhrases();$('newPhrase').value='';$('phraseDialog').close();notify('Frase personal guardada');
+  });
+  window.addEventListener('online',updateOffline);window.addEventListener('offline',updateOffline);
+  renderSelectedContact();renderCategories();renderPhrases();renderTokens();renderPunctuation();renderBuildCategories();renderBuildTiles();updatePrefs();updateOffline();setMode(state.mode);
+  // Secure origin is required for an installable Android PWA and service worker.
+  if('serviceWorker' in navigator && (location.protocol==='https:'||location.hostname==='localhost')){
+    window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));
+  }
+})();

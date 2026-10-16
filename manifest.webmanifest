@@ -1,0 +1,17 @@
+{
+  "id": "./",
+  "name": "Hablemos — Mi voz, mis mensajes",
+  "short_name": "Hablemos",
+  "description": "Comunicación accesible: crear mensajes con botones, voz y WhatsApp.",
+  "lang": "es-AR",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#eef4f3",
+  "theme_color": "#114756",
+  "icons": [
+    {"src":"./assets/icon-192.png","sizes":"192x192","type":"image/png","purpose":"any maskable"},
+    {"src":"./assets/icon-512.png","sizes":"512x512","type":"image/png","purpose":"any maskable"}
+  ]
+}
