@@ -133,19 +133,25 @@ function onUpdate(u) {
   if (!m || !m.chat || m.chat.type !== 'private' || !m.from || m.from.is_bot) return;
   const chatId = String(m.chat.id);
   const name = [m.from.first_name, m.from.last_name].filter(Boolean).join(' ').trim().slice(0, 64) || m.from.username || 'Sin nombre';
+  const text = describe(m);
+  const isStart = /^\/start\b/.test(text);
+  const entry = { chatId, dir: 'in', text: text.slice(0, 4096), date: (m.date || Date.now() / 1000) * 1000, id: m.message_id };
   let p = db.people[chatId];
   if (!p) {
-    // Alguien nuevo: queda pendiente hasta que quien acompaña lo apruebe en Hablemos. Sus mensajes no se guardan.
+    // Alguien nuevo: queda pendiente hasta que quien acompaña lo apruebe en Hablemos.
     const pending = Object.values(db.people).filter(x => x.status === 'pending').sort((a, b) => a.since - b.since);
     if (pending.length >= MAX_PENDING) delete db.people[pending[0].chatId];
-    db.people[chatId] = { chatId, name, username: (m.from.username || '').slice(0, 64), status: 'pending', since: Date.now() };
+    p = db.people[chatId] = { chatId, name, username: (m.from.username || '').slice(0, 64), status: 'pending', since: Date.now(), held: [] };
     touchPeople();
+  }
+  if (isStart) return;
+  if (p.status !== 'linked') {
+    // Sus mensajes se guardan aparte (no se muestran) y se entregan si se aprueba a la persona, así no se pierden.
+    p.held = (p.held || []).concat(entry).slice(-20);
+    save();
     return;
   }
-  if (p.status !== 'linked') return;
-  const text = describe(m);
-  if (/^\/start\b/.test(text)) return;
-  addMessage({ chatId, dir: 'in', text: text.slice(0, 4096), date: (m.date || Date.now() / 1000) * 1000, id: m.message_id });
+  addMessage(entry);
 }
 
 // ---------- HTTP ----------
@@ -178,7 +184,7 @@ function pinOk(req) {
   const a = crypto.createHash('sha256').update(given).digest(), b = crypto.createHash('sha256').update(PIN).digest();
   return PIN.length > 0 && crypto.timingSafeEqual(a, b);
 }
-function publicPeople() { return Object.values(db.people).map(p => ({ chatId: p.chatId, name: p.name, username: p.username, status: p.status })); }
+function publicPeople() { return Object.values(db.people).map(p => ({ chatId: p.chatId, name: p.name, username: p.username, status: p.status, waiting: (p.held || []).length })); }
 function errorFor(e) {
   if (e.code === 403) return { status: 409, error: 'blocked' };
   if (e.code === 400 && /chat not found/i.test(e.message)) return { status: 409, error: 'chat-not-found' };
@@ -262,9 +268,12 @@ const server = http.createServer(async (req, res) => {
         const wasLinked = person.status === 'linked';
         person.status = 'linked';
         if (name) person.name = name;
+        // Entrega los mensajes que mandó mientras esperaba la aprobación.
+        const held = person.held || []; delete person.held;
         touchPeople();
-        if (!wasLinked) tg('sendMessage', { chat_id: chatId, text: '✅ ¡Listo! Ya estás conectado/a. Los mensajes de Hablemos te van a llegar por este chat, y podés responder escribiendo acá.' }).catch(() => {});
-        return send(res, 200, { ok: true }, cors);
+        for (const h of held) addMessage(h);
+        if (!wasLinked && !body.migrate) tg('sendMessage', { chat_id: chatId, text: '✅ ¡Listo! Ya estás conectado/a. Los mensajes de Hablemos te van a llegar por este chat, y podés responder escribiendo acá.' }).catch(() => {});
+        return send(res, 200, { ok: true, delivered: held.length }, cors);
       }
       if (url.pathname === '/api/people/rename') {
         if (!person || typeof body.name !== 'string' || !body.name.trim()) return send(res, 400, { error: 'bad-request' }, cors);

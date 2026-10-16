@@ -9,7 +9,7 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Hablemos">
-  <title>Hablemos 0.6.1 · Conversaciones sin escribir</title>
+  <title>Hablemos 0.6.2 · Conversaciones sin escribir</title>
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./assets/icon-192.png" type="image/png">
   <style>
@@ -458,6 +458,13 @@
           <button id="tgBackupBtn" type="button" class="clear wide" style="margin-top:10px">💾 Guardar copia de seguridad</button>
         </div>
         <p id="tgConnStatus" class="conn-status" role="status" hidden></p>
+        <div id="srvMoveBox" class="voice-help" hidden>
+          <b>Pasar al servidor de Hablemos (recomendado).</b> El token queda en el servidor, los mensajes se guardan aunque Hablemos esté cerrada y en otros teléfonos alcanza con el PIN. Las personas conectadas se mantienen.
+          <label class="field" for="srvMovePin">PIN del servidor</label>
+          <input id="srvMovePin" class="forminput" type="password" autocomplete="off">
+          <div id="srvMoveError" class="error" role="alert" hidden></div>
+          <button id="srvMove" type="button" class="formbtn">Pasar al servidor</button>
+        </div>
         <details id="tgReplaceBox" class="tg-replace">
           <summary>Cambiar el token del bot</summary>
           <p class="formhint">Usalo si generaste un token nuevo con <b>/revoke</b> en @BotFather. Las personas conectadas y las conversaciones se mantienen.</p>
@@ -526,6 +533,6 @@
     </div>
   </dialog>
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
-  <script src="./app.js?v=0.6.1" defer></script>
+  <script src="./app.js?v=0.6.2" defer></script>
 </body>
 </html>

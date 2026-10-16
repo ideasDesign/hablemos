@@ -562,6 +562,7 @@
     connecting:'🟡 Conectando con Telegram…',
     ok:'🟢 Conectado. Los mensajes llegan mientras Hablemos está abierta.',
     'ok-server':'🟢 Conectado al servidor. Los mensajes se guardan aunque Hablemos esté cerrada.',
+    'use-server':'🟠 Este bot ahora funciona con el servidor de Hablemos y esta conexión ya no recibe mensajes. Pasate al servidor en Configuración → Telegram → «Pasar al servidor», con el PIN.',
     'bad-pin':'🔴 El PIN no es correcto (¿se cambió HABLEMOS_PIN en Railway?). Escribí el PIN nuevo en Configuración → Telegram → «Cambiar el PIN».',
     'too-many':'🔴 Hubo demasiados intentos con PIN equivocado. El servidor espera 15 minutos antes de aceptar otro.',
     'not-configured':'🟠 El servidor todavía no tiene el token o el PIN. Cargalos en Railway → Variables (TELEGRAM_TOKEN y HABLEMOS_PIN).',
@@ -606,6 +607,8 @@
           setConn('retrying');await sleep(5000);continue;
         }
         if(e.code===401){setConn('invalid');notify(tgError(e));return 'invalid';}
+        // El bot tiene el webhook del servidor activo: este modo ya no puede recibir.
+        if(e.code===409&&/webhook/i.test(e.message)){if(tgConn!=='use-server'){setConn('use-server');notify(connText['use-server']);}await sleep(30000);continue;}
         setConn(e.code===409?'conflict':'retrying');
         await sleep(e.code===409?15000:5000);
       }finally{if(pollCtrl===ctrl)pollCtrl=null;}
@@ -704,7 +707,7 @@
     $('tgStepToken').hidden=ready;$('tgStepPeople').hidden=!ready;
     renderConn();
     if(!ready){if(!$('srvUrl').value)$('srvUrl').value=DEFAULT_SERVER_URL;return;}
-    $('tgReplaceBox').hidden=isServer();$('srvPinBox').hidden=!isServer();
+    $('tgReplaceBox').hidden=isServer();$('srvPinBox').hidden=!isServer();$('srvMoveBox').hidden=isServer();
     if(tgConn==='invalid')$('tgReplaceBox').open=true;
     if(tgConn==='bad-pin')$('srvPinBox').open=true;
     $('tgBotName').textContent=state.tg.bot?state.tg.bot.name+' (@'+state.tg.bot.username+')':'tu bot';
@@ -818,14 +821,14 @@
     }catch(e){return fail(e.code?srvError(e):'No se pudo llegar al servidor. Revisá la dirección y la conexión.');}
     finally{$(buttonId).disabled=false;}
   }
-  async function connectServer(){
-    const ok=await checkServer($('srvUrl').value,$('srvPin').value,'srvError','srvConnect');if(!ok)return;
+  async function connectServer(url=$('srvUrl').value,pinInput='srvPin',errorId='srvError',buttonId='srvConnect'){
+    const ok=await checkServer(url,$(pinInput).value,errorId,buttonId);if(!ok)return;
     // Si había personas conectadas con el token directo, se pasan al servidor para no tener que reconectarlas.
     const before=state.contacts.filter(c=>c.telegramId);
     stopPolling();
     state.tg={...tgInitial(),server:{url:ok.url,pin:ok.pin},bot:ok.status.bot,autoRead:state.tg.autoRead,confirm:state.tg.confirm,threads:state.tg.threads};
     for(const c of before){try{await srvCall('/api/people/link',{method:'POST',body:{chatId:c.telegramId,name:c.name,migrate:true}});}catch(e){}}
-    $('srvPin').value='';
+    $(pinInput).value='';
     persist();setConn('connecting');renderTgDialog();renderChat();startPolling();requestPersist();
     notify('Conectado al servidor · bot @'+ok.status.bot.username+(ok.status.persistent?'':' (⚠️ el servidor no tiene almacenamiento permanente)'));
   }
@@ -1073,7 +1076,8 @@
   });
   $('incomingClose').addEventListener('click',()=>{$('incoming').hidden=true;});
   $('tgReplace').addEventListener('click',replaceToken);
-  $('srvConnect').addEventListener('click',connectServer);
+  $('srvConnect').addEventListener('click',()=>connectServer());
+  $('srvMove').addEventListener('click',()=>connectServer(DEFAULT_SERVER_URL,'srvMovePin','srvMoveError','srvMove'));
   $('srvPinSave').addEventListener('click',changeServerPin);
   $('backupOpen').addEventListener('click',openBackupDialog);
   $('tgBackupBtn').addEventListener('click',openBackupDialog);
