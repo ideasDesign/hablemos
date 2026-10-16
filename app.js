@@ -106,7 +106,7 @@
   // V0.4: Telegram. threads = {chatId: [{dir:'in'|'out', text, date}]}; pending = personas que tocaron «Iniciar» y aún no están vinculadas.
   // V0.6: server = {url, pin} cuando Hablemos se conecta a su propio servidor (el token queda en el servidor). seq/pv = hasta dónde se sincronizó.
   const tgInitial=()=>({token:'',server:null,seq:0,pv:-1,bot:null,offset:0,autoRead:true,confirm:true,pending:[],threads:{}});
-  const DEFAULT_SERVER_URL='';
+  const DEFAULT_SERVER_URL='https://hablemos-production.up.railway.app';
   const serverUrlOk=v=>typeof v==='string'&&/^https?:\/\/[^\s/]+(:\d+)?\/?$/.test(v);
   const chatIdOk=v=>typeof v==='string'&&/^-?\d{1,20}$/.test(v);
   let state = {...initial,learned:{},tg:tgInitial()};

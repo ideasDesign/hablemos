@@ -1,6 +1,28 @@
-# Hablemos V0.5 — Crear conversaciones sin escribir
+# Hablemos V0.6 — Crear conversaciones sin escribir
 
 **Prototipo accesible para Android**. Diseñado para una persona que comprende texto y puede pulsar botones grandes, pero no puede hablar y tiene dificultad para escribir.
+
+## Cambios de la versión 0.6: servidor propio para Telegram
+
+Hablemos tiene un servidor propio en Railway: **https://hablemos-production.up.railway.app** (el código está en la carpeta `server/`).
+
+- **El token del bot vive solo en el servidor**, como variable de entorno (`TELEGRAM_TOKEN`). No está en el código ni en ningún teléfono.
+- **En cada teléfono o navegador alcanza con el PIN** (`HABLEMOS_PIN`): Configuración → Telegram → «Conectar con el servidor». Los contactos de Telegram y las conversaciones aparecen solos.
+- **Los mensajes se guardan aunque Hablemos esté cerrada**: Telegram se los avisa al servidor (webhook) y quedan en un disco permanente (Volume `/data`).
+- **Varios dispositivos a la vez**, sin el aviso 🟠.
+- Seguridad: solo la app publicada puede usar el servidor desde el navegador. El PIN se bloquea por 15 minutos después de 8 intentos equivocados. Los mensajes de Telegram se verifican con una clave secreta. Las personas nuevas quedan pendientes hasta que se las aprueba.
+- La forma anterior (pegar el token en el navegador) sigue disponible como «Otra opción».
+
+### Configuración del servidor en Railway
+
+Proyecto **reliable-gratitude**, servicio **hablemos** (repositorio `ideasDesign/hablemos`, carpeta raíz `/server`, puerto 8080, Volume en `/data`). En **Variables** tienen que estar:
+
+| Variable | Qué es |
+|---|---|
+| `TELEGRAM_TOKEN` | El token del bot que da @BotFather. |
+| `HABLEMOS_PIN` | El PIN que se escribe en la app. Conviene que tenga al menos 8 caracteres. |
+
+Cada `git push` a `main` vuelve a publicar el servidor solo. Si se cambia el token con `/revoke`, solo hay que actualizar `TELEGRAM_TOKEN` en Railway.
 
 ## Cambios de la versión 0.5: configurar una vez y no perder nada
 
@@ -110,8 +132,8 @@ Los datos (contactos, frases, palabras aprendidas) se guardan **solo en ese tel�
 
 ### Publicar una nueva versión
 
-1. Cambiar el nombre de la caché en `sw.js` (por ejemplo `hablemos-offline-v8` → `hablemos-offline-v9`), para actualizar la copia que se usa sin conexión.
-2. En `index.html`, cambiar la versión del script: `app.js?v=0.5` → `app.js?v=0.5.1`. **Si no se cambia, el navegador puede seguir usando el `app.js` anterior hasta 10 minutos.**
+1. Cambiar el nombre de la caché en `sw.js` (por ejemplo `hablemos-offline-v9` → `hablemos-offline-v10`), para actualizar la copia que se usa sin conexión.
+2. En `index.html`, cambiar la versión del script: `app.js?v=0.6` → `app.js?v=0.6.1`. **Si no se cambia, el navegador puede seguir usando el `app.js` anterior hasta 10 minutos.**
 3. Guardar los cambios con git y subirlos: `git commit -am "…"` y `git push`.
 4. En uno o dos minutos GitHub Pages publica la nueva versión. Con internet, la próxima vez que se abra Hablemos ya carga la nueva.
 
