@@ -9,7 +9,7 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Hablemos">
-  <title>Hablemos 0.7 · Conversaciones sin escribir</title>
+  <title>Hablemos 0.8 · Conversaciones sin escribir</title>
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./assets/icon-192.png" type="image/png">
   <style>
@@ -170,6 +170,62 @@
     .conn-status[data-state=invalid]{background:#fde8e8;color:#7d2125}
     .tg-replace{border:2px solid var(--line);border-radius:14px;padding:10px 12px;margin:4px 0 6px}
     .tg-replace summary{font-weight:800;color:var(--primary);min-height:40px;display:flex;align-items:center;cursor:pointer}
+    /* V0.8: pantalla simple, sin desplazarse */
+    html,body{height:100%}
+    body{overflow:hidden;background:var(--soft)}
+    .app{height:100vh;height:100dvh;max-width:920px;margin:0 auto;display:flex;flex-direction:column;gap:8px;padding:8px 10px calc(8px + env(safe-area-inset-bottom))}
+    .app>*{flex-shrink:0}
+    .topbar{display:flex;gap:8px}
+    .topbar .help{flex:1;min-height:58px;margin:0;font-size:1.08rem}
+    .topbar .gear{min-width:58px;min-height:58px;background:#e3ecec;color:var(--primary);border:2px solid #b9cfd1;font-size:1.5rem;position:relative;overflow:hidden}
+    .gear.pressing::after{content:'';position:absolute;left:0;right:0;bottom:0;height:6px;background:#e0a342;transform-origin:left;animation:holdfill 1s linear forwards}
+    .touch-hint{margin:0;background:#f7e3b2;color:#3d2a07}
+    .offline,.incoming,.join{margin:0}
+    .msg-strip{width:100%;min-height:78px;max-height:24vh;overflow:hidden;text-align:left;background:#fff;border:3px solid var(--primary);border-radius:18px;padding:12px 16px;font-size:1.5rem;font-weight:850;line-height:1.3;color:var(--ink);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow-wrap:anywhere}
+    .msg-strip.long{font-size:1.2rem}
+    .msg-strip.empty{color:#6b8088;font-weight:700;font-size:1.15rem;border-style:dashed}
+    .board{flex:1 1 auto;min-height:0;display:grid;gap:8px;align-content:stretch}
+    .tile{min-width:0;min-height:0;border-radius:18px;border:3px solid #a9c4c7;background:#fff;color:var(--ink);font-size:1.28rem;font-weight:850;line-height:1.2;padding:6px 8px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;text-align:center;overflow:hidden;position:relative}
+    .tile .lbl{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
+    .tile .ico{font-size:1.55rem;line-height:1}
+    .tile .badge{background:#c0392b;color:#fff;border-radius:999px;padding:2px 10px;font-size:.85rem;font-weight:800}
+    .tile:active{transform:scale(.97)}
+    .tile.learned{background:#fdeccb;border-color:#c48a2c}
+    .tile.learned .lbl::before{content:'★ ';color:#a86a0c}
+    .tile.phrase{background:#f4faf9;font-size:1.1rem;font-weight:800}
+    .tile.folder{background:#dcebee;border-color:#6f9aa2;color:var(--primary)}
+    .tile.back,.tile.nav{background:#eef0f0;border:3px dashed #8aa3a7;color:#2f4b52}
+    .board.is-chat{display:flex;flex-direction:column;gap:8px}
+    .chat-title{margin:0;font-size:1.25rem}
+    .chat-thread.big{flex:1;min-height:0;max-height:none;overflow-y:auto}
+    .chat-thread.big .bubble p{font-size:1.2rem}
+    .chat-thread.big .bubble-say{min-height:52px;font-size:1.05rem;padding:8px 14px}
+    .chat-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+    .chat-actions .tile{min-height:76px}
+    .actions{display:grid;grid-template-columns:1fr 1.25fr 1.25fr;gap:8px}
+    .act{min-height:84px;border-radius:18px;border:0;font-size:1.7rem;font-weight:850;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;line-height:1}
+    .act span{font-size:1.12rem}
+    .act.erase{background:#eef2f2;color:var(--ink);border:3px solid #a9c4c7}
+    .act.speak{background:var(--primary);color:#fff}
+    .act.send{background:#1f78b8;color:#fff}
+    .act.cancel{background:#eef2f2;color:var(--ink);border:3px solid var(--line)}
+    .act.dim{opacity:.5}
+    .sheet{width:min(620px,calc(100vw - 16px))}
+    .sheet-body{padding:18px 16px}
+    .sheet-body h2{font-size:1.35rem;margin-bottom:10px}
+    .sheet-people{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:12px 0}
+    .sheet-people .tile{min-height:104px;font-size:1.3rem}
+    .tile.person{background:#e6f2fb;border-color:#1f78b8;color:#0f3550}
+    .tile.person.preferred{border-width:4px;box-shadow:0 0 0 3px #1f78b855}
+    .tile.person .badge{background:#177d46}
+    .wide-act{width:100%}
+    .settings-buttons{display:grid;gap:8px}
+    .toast{top:calc(74px + env(safe-area-inset-top));bottom:auto;pointer-events:none}
+    body.hold-on .app button,body.hold-on dialog[data-board] button{position:relative;overflow:hidden;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+    body.hold-on .app button::after,body.hold-on dialog[data-board] button::after{content:'';position:absolute;left:0;right:0;bottom:0;height:8px;background:#e0a342;transform:scaleX(0);transform-origin:left;pointer-events:none}
+    body.contrast .tile{border-width:4px;border-color:#244e5e}
+    body.contrast .msg-strip{border-color:#02202c}
+    @media(min-width:560px){.sheet-people{grid-template-columns:repeat(3,minmax(0,1fr))}}
     .settings-group{margin:24px 0 2px;font-size:1.02rem;color:var(--primary);border-top:2px solid var(--line);padding-top:16px}
     .settings-group:first-child{margin-top:0;border-top:0;padding-top:0}
     select.forminput{appearance:auto}
@@ -194,19 +250,13 @@
   </style>
 </head>
 <body>
-  <header class="top">
-    <div class="wrap">
-      <div class="headrow">
-        <div class="brand"><div class="brandmark" aria-hidden="true">●●</div><div><strong>Hablemos</strong><small>Mi voz, mis mensajes</small></div></div>
-        <button id="settingsOpen" class="gear" type="button" aria-label="Abrir configuración">⚙</button>
-      </div>
-      <div class="statusline">Creá mensajes sin escribir, escuchalos y compartilos por WhatsApp.</div>
-      <div id="touchHint" class="touch-hint" role="status" hidden></div>
+  <main class="app" id="app">
+    <div class="topbar">
+      <button id="helpBtn" class="help" type="button">🆘 Necesito ayuda</button>
+      <button id="settingsOpen" class="gear" type="button" aria-label="Configuración: mantener apretado para abrir">⚙</button>
     </div>
-  </header>
-  <main class="wrap">
-    <div id="offline" class="offline" role="status" hidden>Sin conexión a internet. Podés seguir preparando frases; WhatsApp necesita conexión.</div>
-    <div class="help-row"><button id="helpBtn" class="help" type="button">🆘 Necesito ayuda ahora</button></div>
+    <div id="touchHint" class="touch-hint" role="status" hidden></div>
+    <div id="offline" class="offline" role="status" hidden>Sin internet: podés usar la voz. Para enviar mensajes hace falta conexión.</div>
     <div id="incoming" class="incoming" role="status" aria-live="polite" hidden>
       <p><strong id="incomingName"></strong> <span id="incomingText"></span></p>
       <div class="incoming-actions">
@@ -222,80 +272,14 @@
         <button id="joinNo" type="button" class="action cancel">Ahora no</button>
       </div>
     </div>
-    <section class="card" aria-labelledby="msg-title">
-      <div class="sectionhead"><h2 id="msg-title">Mi mensaje</h2></div>
-      <textarea id="message" class="message" maxlength="1000" placeholder="Tocá las palabras de abajo para preparar tu mensaje." aria-label="Mensaje para decir o enviar"></textarea>
-      <div class="toolbar">
-        <label class="checkline"><input id="combine" type="checkbox"> Combinar frases</label>
-        <button class="clear" id="clearBtn" type="button">✕ Borrar todo</button>
-      </div>
-      <div class="actiongrid sendgrid">
-        <button id="speakBtn" class="action speak" type="button">🔊 Hablar</button>
-        <button id="whatsBtn" class="action whatsapp" type="button">↗ WhatsApp</button>
-        <button id="tgBtn" class="action telegram" type="button" hidden>✈ Telegram</button>
-      </div>
-      <button id="saveBtn" type="button" class="save-draft">☆ Guardar esta frase para otra ocasión</button>
-      <p class="minor-note">WhatsApp abrirá el mensaje preparado y el envío se confirma dentro de WhatsApp. Telegram envía sin salir de Hablemos.</p>
-    </section>
-    <section class="card" aria-labelledby="contact-title">
-      <div class="sectionhead"><h2 id="contact-title">¿A quién se lo envío?</h2></div>
-      <button id="contactOpen" class="contact" type="button" aria-label="Elegir o agregar contacto">
-        <span class="avatar" id="contactAvatar" aria-hidden="true">+</span>
-        <span class="contacttext"><strong id="contactName">Elegir contacto</strong><small id="contactHint">Agregá un contacto de confianza</small></span>
-        <strong aria-hidden="true">›</strong>
-      </button>
-    </section>
-    <section id="chatCard" class="card" aria-labelledby="chatTitle" hidden>
-      <div class="sectionhead"><h2 id="chatTitle">💬 Conversación</h2></div>
-      <p id="chatStatus" class="conn-status" role="status" hidden></p>
-      <div id="chatThread" class="chat-thread"></div>
-      <p class="minor-note">Los mensajes nuevos llegan mientras Hablemos está abierta. Si estuvo cerrada, aparecen al volver a abrirla.</p>
-    </section>
-    <nav class="modebar" aria-label="Modo de comunicación">
-      <button id="tabBuild" class="mode" type="button" aria-current="page">🧩 Crear mensaje</button>
-      <button id="tabQuick" class="mode" type="button">⭐ Frases rápidas</button>
-      <button id="tabSaved" class="mode" type="button">💾 Guardadas</button>
-    </nav>
-    <section id="builderPanel" class="builder" aria-labelledby="builder-title">
-      <div class="sectionhead"><h2 id="builder-title">Construí tu mensaje tocando botones</h2></div>
-      <p class="muted">Ejemplo: <strong>Quiero → hablar → con mi hermana</strong>. Podés agregar o quitar partes sin usar el teclado.</p>
-      <button class="example" id="exampleBtn" type="button">✨ Probar el ejemplo: Quiero hablar con mi hermana</button>
-      <div class="build-progress">
-        <div class="sectionhead"><strong>Partes elegidas</strong><button id="undoBtn" type="button" class="clear" disabled>↶ Deshacer</button></div>
-        <div id="tokens" class="tokens" aria-live="polite"><span class="muted">Tu mensaje se irá formando acá.</span></div>
-      </div>
-      <div id="suggestBox" class="suggest-box">
-        <div class="sectionhead"><h3 id="suggestTitle">💡 Para empezar</h3><span class="step-hint">★ = usada antes</span></div>
-        <div id="suggestions" class="suggestions" aria-label="Sugerencias para la siguiente palabra"></div>
-      </div>
-      <div class="sectionhead builder-sub"><h3>Elegí palabras o bloques</h3><span id="stepHint" class="step-hint">Empezá por «Inicio»</span></div>
-      <div id="buildCategories" class="categories" role="tablist" aria-label="Tipos de palabras"></div>
-      <div id="buildTiles" class="phrases build-tiles" aria-label="Palabras para construir el mensaje"></div>
-      <div class="punctuation" role="group" aria-label="Cómo termina el mensaje">
-        <span>Terminar con:</span>
-        <button type="button" data-punctuation="." class="punct">. Punto</button>
-        <button type="button" data-punctuation="?" class="punct">? Pregunta</button>
-        <button type="button" data-punctuation="!" class="punct">! Emoción</button>
-      </div>
-      <button id="ownBlockBtn" class="create-block" type="button">＋ Agregar una palabra o bloque personalizado</button>
-      <div class="actiongrid builder-actions sendgrid">
-        <button id="builderSpeakBtn" class="action speak" type="button">🔊 Hablar</button>
-        <button id="builderWhatsBtn" class="action whatsapp" type="button">↗ WhatsApp</button>
-        <button id="builderTgBtn" class="action telegram" type="button" hidden>✈ Telegram</button>
-      </div>
-    </section>
-    <section id="quickPanel" aria-labelledby="phrase-title" hidden>
-
-      <div class="sectionhead" style="margin-top:24px"><h2 id="phrase-title">Elegí lo que querés decir</h2></div>
-      <div id="categories" class="categories" role="tablist" aria-label="Categorías de frases"></div>
-      <div id="phrases" class="phrases" aria-label="Frases disponibles"></div>
-    </section>
-    <section id="savedPanel" aria-labelledby="saved-title" hidden>
-      <div class="sectionhead" style="margin-top:20px"><h2 id="saved-title">Mensajes que guardé</h2></div>
-      <p class="muted">Guardá los mensajes que usás seguido. Podés volver a seleccionarlos con un solo toque.</p>
-      <div id="savedList" class="saved-list"></div>
-    </section>
-    <p class="footnote">Tus contactos, frases y mensajes guardados se almacenan únicamente en este dispositivo y navegador. WhatsApp no comparte su historial con Hablemos: esta app prepara mensajes, pero no lee chats ni envía mensajes automáticamente. El botón de ayuda no llama a emergencias.</p>
+    <p id="chatStatus" class="conn-status" role="status" hidden></p>
+    <button id="msgStrip" class="msg-strip empty" type="button" aria-live="polite">Tocá las palabras para armar tu mensaje</button>
+    <div id="board" class="board" aria-label="Palabras y frases"></div>
+    <div class="actions">
+      <button id="eraseBtn" class="act erase dim" type="button" aria-label="Borrar la última palabra">↶<span>Borrar</span></button>
+      <button id="speakBtn" class="act speak dim" type="button" aria-label="Decir el mensaje en voz alta">🔊<span>Hablar</span></button>
+      <button id="sendBtn" class="act send dim" type="button" aria-label="Enviar el mensaje a una persona">✈<span>Enviar</span></button>
+    </div>
   </main>
 
   <dialog id="contactsDialog" aria-labelledby="contactsTitle">
@@ -347,6 +331,14 @@
       <h3 class="settings-group">Pantalla</h3>
       <div class="settingrow"><label for="largerText">Texto y botones más grandes</label><input id="largerText" type="checkbox"></div>
       <div class="settingrow"><label for="highContrast">Alto contraste</label><input id="highContrast" type="checkbox"></div>
+
+      <h3 class="settings-group">Personas, palabras y frases</h3>
+      <p class="formhint">Esto lo usa quien acompaña. Diego solo ve el tablero.</p>
+      <div class="settings-buttons">
+        <button id="manageContacts" type="button" class="clear wide">👥 Contactos de WhatsApp y Telegram</button>
+        <button id="ownBlockBtn" type="button" class="clear wide">✏️ Agregar una palabra («Mis palabras»)</button>
+        <button id="ownPhraseBtn" type="button" class="clear wide">🗣️ Agregar una frase («Mis frases»)</button>
+      </div>
 
       <h3 class="settings-group">Voz</h3>
       <p id="noVoice" class="error" hidden>Este navegador no tiene síntesis de voz disponible.</p>
@@ -420,14 +412,12 @@
       <button type="button" class="formbtn" data-close="settingsDialog">Listo</button>
     </div>
   </dialog>
-  <dialog id="sendDialog" data-board aria-labelledby="sendTo">
-    <div class="modalbody send-body">
-      <h2 id="sendTo">¿Enviar por Telegram?</h2>
-      <p id="sendPreview" class="send-preview"></p>
-      <div class="actiongrid">
-        <button id="sendNo" type="button" class="action cancel">✕ No, volver</button>
-        <button id="sendYes" type="button" class="action telegram">✈ Sí, enviar</button>
-      </div>
+  <dialog id="sendSheet" class="sheet" data-board aria-labelledby="sheetTitle">
+    <div class="modalbody sheet-body">
+      <h2 id="sheetTitle">¿A quién se lo mando?</h2>
+      <p id="sheetPreview" class="send-preview"></p>
+      <div id="sheetPeople" class="sheet-people"></div>
+      <button id="sheetCancel" type="button" class="act cancel wide-act">✕<span>No enviar</span></button>
     </div>
   </dialog>
 
@@ -508,7 +498,6 @@
         <div id="tgLinked" class="contactlist"></div>
         <h3 class="settings-group">Opciones</h3>
         <div class="settingrow"><label for="tgAutoRead">Leer en voz alta los mensajes que llegan</label><input id="tgAutoRead" type="checkbox"></div>
-        <div class="settingrow"><label for="tgConfirm">Pedir confirmación antes de enviar</label><input id="tgConfirm" type="checkbox"></div>
         <p class="formhint">Solo se muestran y leen mensajes de personas conectadas. Si escribe alguien desconocido, aparece en el paso 4 para aprobarlo o ignorarlo.</p>
         <button id="tgDisconnect" type="button" class="clear wide danger">Desconectar Telegram</button>
       </div>
@@ -546,6 +535,6 @@
     </div>
   </dialog>
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
-  <script src="./app.js?v=0.7" defer></script>
+  <script src="./app.js?v=0.8" defer></script>
 </body>
 </html>

@@ -127,7 +127,7 @@
     const serverOk=tg&&tg.server&&serverUrlOk(tg.server.url)&&typeof tg.server.pin==='string'&&tg.server.pin.length>0&&tg.server.pin.length<=128;
     if(tg&&typeof tg==='object'&&!Array.isArray(tg)&&(tokenOk||serverOk)){
       const clean=tgInitial();
-      if(serverOk){clean.server={url:tg.server.url.replace(/\/$/,''),pin:tg.server.pin};if(Number.isInteger(tg.seq)&&tg.seq>=0)clean.seq=tg.seq;if(Number.isInteger(tg.pv))clean.pv=tg.pv;if(typeof tg.invite==='string'&&/^[\w-]{8,64}$/.test(tg.invite))clean.invite=tg.invite;clean.synced=tg.synced===true;}
+      if(serverOk){clean.server={url:tg.server.url.replace(/\/$/,''),pin:tg.server.pin};if(Number.isInteger(tg.seq)&&tg.seq>=0)clean.seq=tg.seq;if(Number.isInteger(tg.pv))clean.pv=tg.pv;if(tg.lastRead&&typeof tg.lastRead==='object'){clean.lastRead={};for(const [k,v] of Object.entries(tg.lastRead).slice(0,60))if(chatIdOk(k)&&Number.isFinite(v))clean.lastRead[k]=v;}if(typeof tg.invite==='string'&&/^[\w-]{8,64}$/.test(tg.invite))clean.invite=tg.invite;clean.synced=tg.synced===true;}
       else clean.token=tg.token;
       if(tg.bot&&typeof tg.bot.username==='string')clean.bot={username:tg.bot.username.slice(0,64),name:String(tg.bot.name||tg.bot.username).slice(0,64),...(Number.isInteger(tg.bot.id)?{id:tg.bot.id}:{})};
       if(Number.isInteger(tg.offset)&&tg.offset>=0)clean.offset=tg.offset;
@@ -179,23 +179,11 @@
   function persist(){try{localStorage.setItem(STORE_KEY,JSON.stringify({...(loadStored(STORE_KEY)||{}),...state}));}catch(e){notify('No hay espacio para guardar preferencias.');}}
   let toastTimer;
   function notify(msg){const t=$('toast');t.textContent=msg;t.hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>{t.hidden=true;},3000);}
-  function updateMessage(s, preserveTokens=false){
-    state.message=s.slice(0,1000);$('message').value=state.message;
-    if(!preserveTokens){state.tokens=[];renderTokens();}
-    persist();
-  }
-  function setMode(mode,save=true){
-    state.mode=mode;
-    for(const m of ['build','quick','saved']){
-      const tab=$({build:'tabBuild',quick:'tabQuick',saved:'tabSaved'}[m]);
-      const panel=$({build:'builderPanel',quick:'quickPanel',saved:'savedPanel'}[m]);
-      const active=m===mode;
-      panel.hidden=!active;
-      if(active)tab.setAttribute('aria-current','page');else tab.removeAttribute('aria-current');
-    }
-    if(mode==='saved')renderSaved();
-    if(save)persist();
-  }
+  // ===== V0.8: pantalla simple para manos con poca movilidad =====
+  // Todo entra en una sola pantalla, sin desplazarse: el mensaje arriba, un tablero de botones grandes y tres acciones fijas abajo.
+  // El tablero cambia según lo que se va armando (sugerencias) y se recorre con botones grandes, nunca deslizando.
+  let view='main',page=0;
+  function setMessage(text){state.message=String(text||'').slice(0,1000);state.tokens=[];persist();renderScreen();}
   function composeTokens(){
     if(!state.tokens.length)return '';
     let s=state.tokens.join(' ').replace(/\s+/g,' ').trim();
@@ -206,80 +194,34 @@
     s=s.replace(/[.!?]+$/g,'');
     return s+state.punctuation;
   }
-  function updateBuilt(){updateMessage(composeTokens(),true);renderTokens();renderPunctuation();}
+  function updateBuilt(){state.message=composeTokens();persist();renderScreen();}
   function addBlock(word){
-    if(state.tokens.length>=40){notify('Mensaje demasiado largo.');return;}
+    if(state.tokens.length>=40){notify('El mensaje ya es muy largo.');return;}
     state.tokens.push(word);
     if(state.tokens.length===1)state.punctuation=word.startsWith('¿')?'?':word.startsWith('¡')?'!':'.';
-    if(composeTokens().length>1000){state.tokens.pop();notify('El mensaje llegó al máximo de 1000 caracteres.');return;}
+    if(composeTokens().length>1000){state.tokens.pop();notify('El mensaje llegó al máximo.');return;}
+    view='main';page=0; // después de elegir una palabra, vuelven las sugerencias para seguir
     updateBuilt();
-    if(state.tokens.length===1 && word==='Me siento')state.buildCategory='sentimientos';
-    else if(state.tokens.length===1 && word==='Tengo')state.buildCategory='detalles';
-    else if(state.tokens.length===1 && ['inicio','preguntas'].includes(state.buildCategory))state.buildCategory='acciones';
-    else if(state.tokens.length===2 && state.buildCategory==='acciones')state.buildCategory='personas';
-    else if(state.tokens.length===3 && state.buildCategory==='personas')state.buildCategory='tiempo';
-    renderBuildCategories();renderBuildTiles();
   }
-  function renderTokens(){
-    const root=$('tokens');root.replaceChildren();
-    $('undoBtn').disabled=state.tokens.length===0;
-    renderSuggestions();
-    if(!state.tokens.length){const hint=document.createElement('span');hint.className='muted';hint.textContent='Tocá un botón para empezar. También podés probar el ejemplo.';root.append(hint);return;}
-    state.tokens.forEach((part,i)=>{
-      const b=document.createElement('button');b.className='token';b.type='button';b.textContent=part+'  ×';
-      b.title='Quitar '+part;b.setAttribute('aria-label','Quitar parte '+(i+1)+': '+part);
-      b.addEventListener('click',()=>{state.tokens.splice(i,1);updateBuilt();});root.append(b);
-    });
-  }
-  function renderPunctuation(){
-    document.querySelectorAll('[data-punctuation]').forEach(btn=>{
-      btn.setAttribute('aria-pressed',String(btn.dataset.punctuation===state.punctuation));
-    });
-  }
-  function renderBuildCategories(){
-    const root=$('buildCategories');root.replaceChildren();
-    for(const [key,meta] of Object.entries(builderCategories)){
-      const b=document.createElement('button');b.type='button';b.className='category';b.role='tab';b.textContent=meta.label;
-      b.setAttribute('aria-selected',String(state.buildCategory===key));
-      b.addEventListener('click',()=>{state.buildCategory=key;renderBuildCategories();renderBuildTiles();persist();});root.append(b);
-    }
-    $('stepHint').textContent=state.tokens.length ? 'También podés cambiar de categoría' : 'Empezá por «Inicio»';
-  }
-  function renderBuildTiles(){
-    const root=$('buildTiles');root.replaceChildren();
-    const entries=state.buildCategory==='propias'?state.customBlocks:builderCategories[state.buildCategory].entries;
-    for(const word of entries){
-      const b=document.createElement('button');b.type='button';b.className='phrase';b.textContent=word;
-      b.setAttribute('aria-label','Agregar al mensaje: '+word);b.addEventListener('click',()=>addBlock(word));root.append(b);
-    }
-    if(state.buildCategory==='propias'&&!entries.length){const p=document.createElement('p');p.className='muted';p.textContent='Todavía no hay palabras personalizadas. Podés crear una abajo.';root.append(p);}
+  // Borrar: quita la última palabra; si el mensaje vino de una frase, la borra entera.
+  function eraseLast(){
+    if(state.tokens.length){state.tokens.pop();state.message=composeTokens();}
+    else state.message='';
+    persist();renderScreen();
   }
   function categoryOf(word){
     for(const [key,meta] of Object.entries(builderCategories))if(meta.entries.includes(word))return key;
     return state.customBlocks.includes(word)?'propias':null;
   }
-  function getSuggestions(){
+  function getSuggestions(limit=6){
     const prev=state.tokens.length?state.tokens[state.tokens.length-1]:START;
     const used=new Set(state.tokens);
     const learned=Object.entries(state.learned[prev]||{}).sort((a,b)=>b[1]-a[1]).map(([word])=>word);
     const base=nextWords[prev]||nextByCategory[categoryOf(prev)]||['por favor','ahora','hoy'];
     const result=[];
-    for(const word of learned)if(!used.has(word)&&result.length<4)result.push({word,learned:true});
-    for(const word of base)if(!used.has(word)&&!result.some(x=>x.word===word)&&result.length<6)result.push({word,learned:false});
+    for(const word of learned)if(!used.has(word)&&result.length<Math.min(4,limit))result.push({word,learned:true});
+    for(const word of base)if(!used.has(word)&&!result.some(x=>x.word===word)&&result.length<limit)result.push({word,learned:false});
     return result;
-  }
-  function renderSuggestions(){
-    const box=$('suggestBox');box.hidden=!state.suggest;
-    if(!state.suggest)return;
-    const root=$('suggestions');root.replaceChildren();
-    $('suggestTitle').textContent=state.tokens.length?'💡 Para seguir':'💡 Para empezar';
-    const list=getSuggestions();
-    if(!list.length){const p=document.createElement('p');p.className='muted';p.textContent='Elegí una palabra de las categorías de abajo.';root.append(p);return;}
-    for(const {word,learned} of list){
-      const b=document.createElement('button');b.type='button';b.className='suggestion'+(learned?' learned':'');b.textContent=word;
-      b.setAttribute('aria-label','Agregar sugerencia'+(learned?' usada antes':'')+': '+word);
-      b.addEventListener('click',()=>addBlock(word));root.append(b);
-    }
   }
   // Aprende el orden de las palabras solo cuando el mensaje se usa (hablar, enviar o guardar).
   let lastLearned='';
@@ -303,51 +245,144 @@
     }
     persist();
   }
-  function selectPhrase(phrase){
-    const current=state.message.trim();const s=state.combine&&current?current+' '+phrase:phrase;
-    updateMessage(s);notify('Mensaje preparado');
-  }
-  function renderCategories(){
-    const root=$('categories');root.replaceChildren();
-    for(const [key,val] of Object.entries(data)){
-      const b=document.createElement('button');b.type='button';b.className='category';b.role='tab';b.textContent=val.label;
-      b.setAttribute('aria-selected',String(state.category===key));
-      b.addEventListener('click',()=>{state.category=key;persist();renderCategories();renderPhrases();});root.append(b);
-    }
-  }
-  function renderPhrases(){
-    const root=$('phrases');root.replaceChildren();
-    const entries=state.category==='propias'?state.ownPhrases.map(x=>['🗣️',x]):data[state.category].phrases;
-    for(const [emoji,phrase] of entries){
-      const b=document.createElement('button');b.className='phrase';b.type='button';b.setAttribute('aria-label','Preparar mensaje: '+phrase);
-      const e=document.createElement('span');e.className='emoji';e.textContent=emoji;e.setAttribute('aria-hidden','true');
-      const label=document.createElement('span');label.textContent=phrase;
-      b.append(e,label);b.addEventListener('click',()=>selectPhrase(phrase));root.append(b);
-    }
-    if(state.category==='propias'){
-      const b=document.createElement('button');b.className='phrase add-phrase';b.type='button';b.textContent='＋ Crear una frase';
-      b.addEventListener('click',()=>$('phraseDialog').showModal());root.append(b);
-    }
-  }
-  function renderSaved(){
-    const root=$('savedList');root.replaceChildren();
-    if(!state.savedMessages.length){const p=document.createElement('p');p.className='muted';p.textContent='Aún no guardaste ningún mensaje. Escribí uno con los botones y tocá «Guardar esta frase».';root.append(p);return;}
-    for(const m of state.savedMessages){
-      const row=document.createElement('div');row.className='saved-row';
-      const b=document.createElement('button');b.type='button';b.className='saved-pick';b.textContent=m;b.setAttribute('aria-label','Usar mensaje guardado: '+m);
-      b.addEventListener('click',()=>{updateMessage(m);setMode('build');notify('Frase guardada lista para hablar o enviar');window.scrollTo({top:0,behavior:'smooth'});});
-      const del=document.createElement('button');del.type='button';del.className='saved-delete';del.textContent='✕';del.setAttribute('aria-label','Eliminar mensaje guardado');
-      del.addEventListener('click',()=>{if(!window.confirm('¿Eliminar este mensaje guardado?'))return;state.savedMessages=state.savedMessages.filter(x=>x!==m);persist();renderSaved();});
-      row.append(b,del);root.append(row);
-    }
+  // Una frase completa se dice en voz alta al tocarla: un solo toque para lo más urgente.
+  function selectPhrase(phrase){setMessage(phrase);view='main';page=0;renderScreen();talk(phrase);}
+  function saveCurrent(){
+    const m=state.message.trim();if(!m){notify('Primero armá un mensaje.');return;}
+    learnFromMessage();
+    if(state.savedMessages.includes(m)){notify('Este mensaje ya estaba guardado.');return;}
+    state.savedMessages.unshift(m);state.savedMessages=state.savedMessages.slice(0,60);persist();notify('Mensaje guardado');renderScreen();
   }
   function selected(){return state.contacts.find(c=>c.id===state.selectedContactId)||null;}
-  function renderSelectedContact(){
-    const c=selected();$('contactName').textContent=c?c.name:'Elegir contacto';
-    $('contactHint').textContent=c?'Tocar para cambiar':'Agregá un contacto de confianza';
-    $('contactAvatar').textContent=c?c.name.trim().charAt(0).toLocaleUpperCase('es'):'+';
-    renderChat();
+  const tgContacts=()=>tgReady()?state.contacts.filter(c=>c.telegramId):[];
+  function unreadCount(c){
+    const seen=(state.tg.lastRead||{})[c.telegramId]||0;
+    return (state.tg.threads[c.telegramId]||[]).filter(m=>m.dir==='in'&&m.date>seen).length;
   }
+  function markRead(c){state.tg.lastRead={...(state.tg.lastRead||{}),[c.telegramId]:Date.now()};persist();}
+  function go(next){view=next;page=0;renderBoard();}
+  function openChat(c){view='chat:'+c.id;page=0;markRead(c);renderScreen();}
+  const folderMeta={inicio:['▶️','Para empezar'],acciones:['🏃','Acciones'],detalles:['🧩','Cosas y lugares'],personas:['👥','Personas'],tiempo:['🕒','Cuándo'],sentimientos:['❤️','Sentimientos'],preguntas:['❓','Preguntas'],respuestas:['✅','Respuestas'],propias:['✏️','Mis palabras']};
+  const phraseFolders=[['cuidados','🧡','Cuidados'],['conversar','💬','Conversar'],['emociones','🙂','Cómo me siento'],['respuestas','✅','Respuestas'],['propias','✏️','Mis frases']];
+  const tile=(kind,label,onTap,icon='',extra='')=>({kind,label,onTap,icon,extra});
+  const backTo=target=>tile('back','Volver',()=>go(target),'◀');
+  function boardItems(){
+    if(view==='main'){
+      const items=[];
+      if(!state.tokens.length){
+        items.push(tile('folder','Frases rápidas',()=>go('phrases'),'⭐'));
+        const chats=tgContacts();
+        if(chats.length){
+          const unread=chats.reduce((n,c)=>n+unreadCount(c),0);
+          items.push(tile('folder',chats.length===1?'Mensajes de '+chats[0].name:'Mensajes',()=>chats.length===1?openChat(chats[0]):go('people'),'💬',unread?unread+(unread===1?' nuevo':' nuevos'):''));
+        }
+      }
+      if(state.suggest)for(const {word,learned} of getSuggestions(state.tokens.length?8:6))items.push(tile(learned?'learned':'word',word,()=>addBlock(word)));
+      items.push(tile('folder',state.suggest?'Más palabras':'Palabras',()=>go('folders'),'📂'));
+      return items;
+    }
+    if(view==='folders'){
+      const items=[backTo('main')];
+      for(const [key,meta] of Object.entries(builderCategories)){
+        if(key==='propias'&&!state.customBlocks.length)continue;
+        const [icon,name]=folderMeta[key]||['📁',meta.label];
+        items.push(tile('folder',name,()=>go('cat:'+key),icon));
+      }
+      items.push(tile('folder','Frases rápidas',()=>go('phrases'),'⭐'));
+      if(state.savedMessages.length)items.push(tile('folder','Guardadas',()=>go('saved'),'💾'));
+      if(state.message.trim())items.push(tile('nav','Guardar este mensaje',saveCurrent,'☆'));
+      return items;
+    }
+    if(view.startsWith('cat:')){
+      const key=view.slice(4);const words=key==='propias'?state.customBlocks:(builderCategories[key]||{entries:[]}).entries;
+      return [backTo('folders'),...words.map(w=>tile('word',w,()=>addBlock(w)))];
+    }
+    if(view==='phrases'||view.startsWith('pcat:')){
+      const key=view==='phrases'?'frecuentes':view.slice(5);
+      const list=key==='propias'?state.ownPhrases.map(x=>['🗣️',x]):(data[key]||{phrases:[]}).phrases;
+      const items=[backTo(view==='phrases'?'main':'phrases'),...list.map(([icon,text])=>tile('phrase',text,()=>selectPhrase(text),icon))];
+      if(view==='phrases')for(const [k,icon,name] of phraseFolders){if(k==='propias'&&!state.ownPhrases.length)continue;items.push(tile('folder',name,()=>go('pcat:'+k),icon));}
+      return items;
+    }
+    if(view==='saved')return [backTo('folders'),...state.savedMessages.map(m=>tile('phrase',m,()=>selectPhrase(m),'💾'))];
+    if(view==='people')return [backTo('main'),...tgContacts().map(c=>{const n=unreadCount(c);return tile('folder',c.name,()=>openChat(c),'👤',n?n+(n===1?' nuevo':' nuevos'):'');})];
+    view='main';return boardItems();
+  }
+  function boardCols(){const w=$('board').clientWidth;return w>=900?4:w>=560?3:2;}
+  function tileHeight(){return Math.round(88*(state.large?1.15:1));}
+  function makeTile(t){
+    const b=document.createElement('button');b.type='button';b.className='tile '+t.kind;
+    if(t.icon){const i=document.createElement('span');i.className='ico';i.setAttribute('aria-hidden','true');i.textContent=t.icon;b.append(i);}
+    const l=document.createElement('span');l.className='lbl';l.textContent=t.label;b.append(l);
+    if(t.extra){const x=document.createElement('span');x.className='badge';x.textContent=t.extra;b.append(x);}
+    b.setAttribute('aria-label',(t.kind==='word'||t.kind==='learned'?'Agregar: ':'')+t.label+(t.extra?', '+t.extra:''));
+    b.addEventListener('click',t.onTap);
+    return b;
+  }
+  function renderBoard(){
+    const root=$('board');root.replaceChildren();
+    root.classList.toggle('is-chat',view.startsWith('chat:'));
+    if(view.startsWith('chat:')){renderChatView(root);return;}
+    const items=boardItems();
+    const cols=boardCols();
+    const gap=8,rows=Math.max(2,Math.floor((root.clientHeight+gap)/(tileHeight()+gap)));
+    const cap=cols*rows;
+    let pages=[items];
+    if(items.length>cap){
+      // Se pasa de página con un botón grande «Más», siempre en el mismo lugar. «Volver» queda fijo en cada página.
+      const pinned=items[0].kind==='back'?items[0]:null;
+      const rest=pinned?items.slice(1):items;
+      const per=cap-(pinned?2:1);
+      pages=[];for(let i=0;i<rest.length;i+=per)pages.push(rest.slice(i,i+per));
+      pages=pages.map(p=>pinned?[pinned,...p]:p);
+    }
+    page=page%pages.length;
+    const shown=pages[page].slice();
+    if(pages.length>1)shown.push(tile('nav','Más ('+(page+1)+' de '+pages.length+')',()=>{page=(page+1)%pages.length;renderBoard();},'▶'));
+    // Con pocos botones, cada uno crece para aprovechar el espacio (más fácil de tocar), hasta un tope.
+    const used=Math.max(1,Math.ceil(shown.length/cols));
+    const rowH=Math.min(Math.round(tileHeight()*1.9),Math.floor((root.clientHeight-gap*(used-1))/used));
+    root.style.gridTemplateColumns='repeat('+cols+',minmax(0,1fr))';
+    root.style.gridTemplateRows='repeat('+used+','+Math.max(tileHeight(),rowH)+'px)';
+    for(const t of shown)root.append(makeTile(t));
+  }
+  function renderChatView(root){
+    const c=state.contacts.find(x=>'chat:'+x.id===view);
+    if(!c||!c.telegramId){view='main';renderBoard();return;}
+    root.style.gridTemplateColumns='';root.style.gridTemplateRows='';
+    const title=document.createElement('h2');title.className='chat-title';title.textContent='💬 '+c.name;
+    const thread=document.createElement('div');thread.className='chat-thread big';
+    const list=(state.tg.threads[c.telegramId]||[]).slice(-20);
+    if(!list.length){const p=document.createElement('p');p.className='muted';p.textContent='Todavía no hay mensajes con '+c.name+'.';thread.append(p);}
+    for(const m of list){
+      const row=document.createElement('div');row.className='bubble '+m.dir;
+      const who=document.createElement('small');who.textContent=(m.dir==='in'?c.name:'Yo')+' · '+formatTime(m.date);
+      const text=document.createElement('p');text.textContent=m.text;
+      row.append(who,text);
+      if(m.dir==='in'){
+        const say=document.createElement('button');say.type='button';say.className='bubble-say';say.textContent='🔊 Escuchar';
+        say.setAttribute('aria-label','Escuchar mensaje de '+c.name);say.addEventListener('click',()=>talk(m.text));row.append(say);
+      }
+      thread.append(row);
+    }
+    const actions=document.createElement('div');actions.className='chat-actions';
+    actions.append(makeTile(tile('back','Volver',()=>go('main'),'◀')),makeTile(tile('folder','Responder',()=>{state.selectedContactId=c.id;persist();go('main');notify('Armá tu respuesta para '+c.name);},'✍')));
+    root.append(title,thread,actions);
+    thread.scrollTop=thread.scrollHeight;
+    markRead(c);
+  }
+  function renderMessageStrip(){
+    const el=$('msgStrip');const has=!!state.message.trim();
+    el.textContent=has?state.message:'Tocá las palabras para armar tu mensaje';
+    el.classList.toggle('empty',!has);
+    el.classList.toggle('long',state.message.length>70);
+    el.setAttribute('aria-label',has?'Mensaje: '+state.message+'. Tocar para escucharlo':'Todavía no hay mensaje');
+    for(const id of ['speakBtn','sendBtn'])$(id).classList.toggle('dim',!has);
+    $('eraseBtn').classList.toggle('dim',!has);
+  }
+  function renderScreen(){renderMessageStrip();renderBoard();}
+  // Compatibilidad con el resto del código, que avisa cuando cambian contactos o conversaciones.
+  const renderSelectedContact=()=>renderScreen();
   function renderContactList(){
     $('contactsInvite').hidden=!(tgReady()&&state.tg.bot);
     const root=$('contactsList');root.replaceChildren();
@@ -430,9 +465,9 @@
     if(naturalOther)text+='<br>Mientras tanto, la voz más natural de esta lista es <b>'+naturalOther.name.replace(/[<>&]/g,'')+'</b>'+(isMale(naturalOther)?'':' (de mujer)')+'.';
     box.innerHTML=text;
   }
-  function sendWhatsApp(){
-    const msg=state.message.trim();if(!msg){notify('Primero prepará un mensaje.');return;}
-    const c=selected();if(!c){renderContactList();$('contactsDialog').showModal();notify('Elegí o agregá un contacto.');return;}
+  function sendWhatsApp(c=selected()){
+    const msg=state.message.trim();if(!msg){notify('Primero armá un mensaje.');return;}
+    if(!c){notify('Elegí a quién mandarle el mensaje.');return;}
     if(!c.phone){notify(c.name+' no tiene número de WhatsApp. Podés usar Telegram.');return;}
     const num=c.phone.replace(/\D/g,'');if(!/^\d{8,15}$/.test(num)){notify('Revisá el número internacional.');return;}
     learnFromMessage();
@@ -580,7 +615,10 @@
   function setConn(s){if(tgConn===s)return;tgConn=s;renderConn();}
   function renderConn(){
     const text=tgReady()?connText[tgConn==='ok'&&isServer()?'ok-server':tgConn]:'';
-    for(const id of ['chatStatus','tgConnStatus']){const el=$(id);el.textContent=text;el.hidden=!text;el.dataset.state=tgConn;}
+    for(const id of ['chatStatus','tgConnStatus']){
+      const el=$(id);el.textContent=text;el.dataset.state=tgConn;
+      el.hidden=!text||(id==='chatStatus'&&['ok','other-tab','connecting','idle'].includes(tgConn));
+    }
     renderTgStatus();
   }
   // Solo una pestaña de este dispositivo consulta a Telegram a la vez (Web Locks). Las demás se enteran por el almacenamiento compartido.
@@ -651,43 +689,37 @@
     const time=d.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
     return d.toDateString()===today.toDateString()?time:d.toLocaleDateString('es-AR',{day:'numeric',month:'short'})+' '+time;
   }
-  function renderChat(){
-    const c=selected();
-    const show=tgReady()&&!!c&&!!c.telegramId;
-    $('chatCard').hidden=!show;
-    for(const id of ['tgBtn','builderTgBtn'])$(id).hidden=!tgReady();
-    document.querySelectorAll('.actiongrid.sendgrid').forEach(g=>g.classList.toggle('has-tg',tgReady()));
-    if(!show)return;
-    $('chatTitle').textContent='💬 Conversación con '+c.name;
-    const root=$('chatThread');root.replaceChildren();
-    const list=(state.tg.threads[c.telegramId]||[]).slice(-30);
-    if(!list.length){const p=document.createElement('p');p.className='muted';p.textContent='Todavía no hay mensajes. Lo que se envíe o reciba por Telegram va a aparecer acá.';root.append(p);return;}
-    for(const m of list){
-      const row=document.createElement('div');row.className='bubble '+m.dir;
-      const who=document.createElement('small');who.textContent=(m.dir==='in'?c.name:'Yo')+' · '+formatTime(m.date);
-      const text=document.createElement('p');text.textContent=m.text;
-      row.append(who,text);
-      if(m.dir==='in'){
-        const say=document.createElement('button');say.type='button';say.className='bubble-say';say.textContent='🔊 Escuchar';
-        say.setAttribute('aria-label','Escuchar mensaje de '+c.name);say.addEventListener('click',()=>talk(m.text));row.append(say);
-      }
-      root.append(row);
+  const renderChat=()=>renderScreen();
+  // Enviar: «¿A quién se lo mando?» con una tarjeta grande por persona. Elegir a la persona ya es la confirmación.
+  let sheetOpenedAt=0,sending=false;
+  function openSendSheet(){
+    const msg=state.message.trim();if(!msg){notify('Primero armá un mensaje.');return;}
+    const people=state.contacts.filter(c=>(c.telegramId&&tgReady())||c.phone);
+    const preferred=selected();
+    people.sort((a,b)=>(b===preferred)-(a===preferred)||(!!(b.telegramId&&tgReady()))-(!!(a.telegramId&&tgReady())));
+    $('sheetPreview').textContent=msg;
+    const root=$('sheetPeople');root.replaceChildren();
+    if(!people.length){const p=document.createElement('p');p.className='muted';p.textContent='Todavía no hay personas para enviar mensajes. Quien te acompaña las agrega en Configuración.';root.append(p);}
+    for(const c of people){
+      const viaTg=!!(c.telegramId&&tgReady());
+      const b=makeTile(tile('person'+(c===preferred?' preferred':''),c.name,()=>{
+        if(Date.now()-sheetOpenedAt<600)return; // evita que un doble toque envíe sin querer
+        $('sendSheet').close();sendTo(c);
+      },viaTg?'✈':'🟢',viaTg?'':'por WhatsApp'));
+      b.setAttribute('aria-label','Enviar a '+c.name+(viaTg?'':' por WhatsApp'));
+      root.append(b);
     }
-    root.scrollTop=root.scrollHeight;
+    sheetOpenedAt=Date.now();$('sendSheet').showModal();
   }
-  function sendTelegram(){
-    const msg=state.message.trim();if(!msg){notify('Primero prepará un mensaje.');return;}
-    const c=selected();if(!c){renderContactList();$('contactsDialog').showModal();notify('Elegí o agregá un contacto.');return;}
-    if(!c.telegramId){notify(c.name+' no está conectado a Telegram. Se conecta en Configuración → Telegram.');return;}
-    if(!navigator.onLine){notify('Sin conexión: Telegram necesita internet.');return;}
-    if(!state.tg.confirm){doSendTelegram();return;}
-    $('sendTo').textContent='¿Enviar a '+c.name+' por Telegram?';$('sendPreview').textContent=msg;
-    sendOpenedAt=Date.now();$('sendDialog').showModal();
+  function sendTo(c){
+    if(c.telegramId&&tgReady()){doSendTelegram(c);return;}
+    if(c.phone){sendWhatsApp(c);return;}
+    notify(c.name+' todavía no tiene cómo recibir mensajes.');
   }
-  let sendOpenedAt=0,sending=false;
-  async function doSendTelegram(){
-    const c=selected();const msg=state.message.trim();
+  async function doSendTelegram(c){
+    const msg=state.message.trim();
     if(sending||!c||!c.telegramId||!msg)return;
+    if(!navigator.onLine){notify('Sin internet: el mensaje no se pudo enviar.');return;}
     sending=true;notify('Enviando a '+c.name+'…');
     try{
       if(isServer()){
@@ -697,7 +729,9 @@
         await tgCall('sendMessage',{chat_id:c.telegramId,text:msg});
         pushThread(c.telegramId,'out',msg,Date.now());
       }
-      learnFromMessage();persist();renderChat();
+      learnFromMessage();
+      state.selectedContactId=c.id;view='main';page=0;
+      setMessage(''); // listo para el próximo mensaje
       notify('✓ Enviado a '+c.name);
     }catch(e){notify(isServer()?srvError(e,c.name):tgError(e,c.name));}
     finally{sending=false;}
@@ -743,7 +777,7 @@
       ?'Compartí este enlace con la familia (por ejemplo por WhatsApp). Quien lo abra en su teléfono, con Telegram instalado, y toque <b>Iniciar</b> queda <b>conectado automáticamente</b>: no hay que aprobar nada.'
       :'Cada persona abre este enlace en su teléfono, con Telegram instalado, y toca <b>Iniciar</b>:';
     $('tgNewInvite').hidden=!isServer();
-    $('tgAutoRead').checked=state.tg.autoRead;$('tgConfirm').checked=state.tg.confirm;
+    $('tgAutoRead').checked=state.tg.autoRead;
     const pend=$('tgPending');pend.replaceChildren();
     if(!state.tg.pending.length){const p=document.createElement('p');p.className='muted';p.textContent='No hay personas esperando. Cuando alguien toque «Iniciar», tocá «Buscar personas».';pend.append(p);}
     for(const p of state.tg.pending){
@@ -1015,44 +1049,45 @@
       lastAccepted=now;
     }
   },true);
-  $('message').value=state.message;$('combine').checked=state.combine;
-  $('message').addEventListener('input',e=>{state.message=e.target.value.slice(0,1000);if(state.tokens.length){state.tokens=[];renderTokens();}persist();});
-  $('combine').addEventListener('change',e=>{state.combine=e.target.checked;persist();notify(state.combine?'Podés combinar frases rápidas':'Una frase rápida reemplaza al mensaje');});
-  $('clearBtn').addEventListener('click',()=>{updateMessage('');state.punctuation='.';renderPunctuation();notify('Mensaje borrado');});
-  $('speakBtn').addEventListener('click',speakMessage);
-  $('whatsBtn').addEventListener('click',sendWhatsApp);
-  $('builderSpeakBtn').addEventListener('click',speakMessage);
-  $('builderWhatsBtn').addEventListener('click',sendWhatsApp);
-  $('saveBtn').addEventListener('click',()=>{
-    const m=state.message.trim();if(!m){notify('Prepará un mensaje antes de guardarlo.');return;}
-    learnFromMessage();
-    if(state.savedMessages.includes(m)){notify('Este mensaje ya está guardado.');return;}
-    state.savedMessages.unshift(m);state.savedMessages=state.savedMessages.slice(0,60);persist();notify('Mensaje guardado para otra ocasión');
+  $('msgStrip').addEventListener('click',()=>{if(state.message.trim())speakMessage();else notify('Tocá las palabras de abajo para armar tu mensaje.');});
+  $('eraseBtn').addEventListener('click',()=>{if(!state.message.trim()&&!state.tokens.length){notify('No hay nada para borrar.');return;}eraseLast();});
+  $('speakBtn').addEventListener('click',()=>{if(!state.message.trim()){notify('Primero armá un mensaje.');return;}speakMessage();});
+  $('sendBtn').addEventListener('click',openSendSheet);
+  $('sheetCancel').addEventListener('click',()=>$('sendSheet').close());
+  $('helpBtn').addEventListener('click',()=>{const msg='Necesito ayuda ahora. Por favor, vení.';setMessage(msg);talk(msg);notify('Pedido de ayuda dicho en voz alta. No se envió a nadie.');});
+  // Configuración: se abre manteniendo apretado ⚙, para que no se abra por un toque sin querer.
+  function openSettings(){renderVoiceSettings();renderBackupStatus();$('settingsDialog').showModal();}
+  let gearTimer=null,gearOpenedAt=0;
+  const gear=$('settingsOpen');
+  gear.addEventListener('pointerdown',()=>{
+    if(state.holdMs)return; // con «mantener presionado» activado, ya lo resuelve la protección general
+    clearTimeout(gearTimer);gear.classList.add('pressing');
+    gearTimer=setTimeout(()=>{gear.classList.remove('pressing');gearOpenedAt=Date.now();openSettings();},1000);
   });
-  $('helpBtn').addEventListener('click',()=>{const msg='Necesito ayuda ahora. Por favor, vení.';updateMessage(msg);talk(msg);notify('La solicitud de ayuda está preparada. No se envió automáticamente.');});
-  $('contactOpen').addEventListener('click',()=>{renderContactList();$('contactsDialog').showModal();});
-  $('settingsOpen').addEventListener('click',()=>$('settingsDialog').showModal());
-  $('tabBuild').addEventListener('click',()=>setMode('build'));
-  $('tabQuick').addEventListener('click',()=>setMode('quick'));
-  $('tabSaved').addEventListener('click',()=>setMode('saved'));
-  $('exampleBtn').addEventListener('click',()=>{state.tokens=['Quiero','hablar','con mi hermana'];state.punctuation='.';state.buildCategory='tiempo';updateBuilt();renderBuildCategories();renderBuildTiles();notify('Ejemplo listo. Tocá una parte para quitarla.');});
-  $('undoBtn').addEventListener('click',()=>{if(!state.tokens.length)return;state.tokens.pop();updateBuilt();});
-  document.querySelectorAll('[data-punctuation]').forEach(btn=>btn.addEventListener('click',()=>{state.punctuation=btn.dataset.punctuation;if(state.tokens.length)updateBuilt();else{renderPunctuation();persist();}}));
-  $('ownBlockBtn').addEventListener('click',()=>$('blockDialog').showModal());
+  for(const type of ['pointerup','pointercancel','pointerleave'])gear.addEventListener(type,()=>{clearTimeout(gearTimer);gear.classList.remove('pressing');});
+  gear.addEventListener('click',e=>{
+    if(e.detail===0){openSettings();return;} // teclado, pulsador o protección de toques
+    if(Date.now()-gearOpenedAt<1500)return;
+    notify('Para abrir la configuración, mantené apretado ⚙ un segundo.');
+  });
+  $('manageContacts').addEventListener('click',()=>{$('settingsDialog').close();renderContactList();$('contactsDialog').showModal();});
+  $('ownBlockBtn').addEventListener('click',()=>{$('settingsDialog').close();$('blockDialog').showModal();});
+  $('ownPhraseBtn').addEventListener('click',()=>{$('settingsDialog').close();$('phraseDialog').showModal();});
+  let boardSize='';
+  new ResizeObserver(()=>{const r=$('board').getBoundingClientRect();const k=Math.round(r.width)+'x'+Math.round(r.height);if(k!==boardSize){boardSize=k;renderBoard();}}).observe($('board'));
   $('blockForm').addEventListener('submit',e=>{
     e.preventDefault();const word=$('newBlock').value.trim().replace(/\s+/g,' ');if(!word)return;
     if(state.customBlocks.length>=80){notify('Se alcanzó el máximo de 80 bloques personalizados.');return;}
     if(state.customBlocks.includes(word)){notify('Esta palabra ya está guardada.');return;}
-    state.customBlocks.push(word);state.buildCategory='propias';$('newBlock').value='';$('blockDialog').close();renderBuildCategories();renderBuildTiles();persist();notify('Bloque creado. Ya podés agregarlo.');
+    state.customBlocks.push(word);$('newBlock').value='';$('blockDialog').close();view='cat:propias';page=0;persist();renderScreen();notify('Palabra agregada en «Mis palabras».');
   });
   $('largerText').addEventListener('change',e=>{state.large=e.target.checked;updatePrefs();persist();});
   $('highContrast').addEventListener('change',e=>{state.contrast=e.target.checked;updatePrefs();persist();});
-  $('settingsOpen').addEventListener('click',()=>{renderVoiceSettings();renderBackupStatus();});
-  $('suggestToggle').addEventListener('change',e=>{state.suggest=e.target.checked;renderSuggestions();persist();});
+  $('suggestToggle').addEventListener('change',e=>{state.suggest=e.target.checked;persist();renderScreen();});
   $('forgetLearned').addEventListener('click',()=>{
     if(!Object.keys(state.learned).length){notify('Todavía no hay palabras aprendidas.');return;}
     if(!window.confirm('¿Olvidar el orden de palabras aprendido? Las sugerencias base se mantienen.'))return;
-    state.learned={};lastLearned='';renderSuggestions();persist();notify('Sugerencias aprendidas borradas');
+    state.learned={};lastLearned='';persist();renderScreen();notify('Sugerencias aprendidas borradas');
   });
   $('voiceSelect').addEventListener('change',e=>{state.voiceURI=e.target.value;persist();renderVoiceSettings();talk('Hola, esta es mi voz.');});
   for(const [id,key] of [['voiceRate','rate'],['voicePitch','pitch'],['voiceVolume','volume']]){
@@ -1071,23 +1106,16 @@
     if(state.contacts.some(c=>c.phone===phone)){error.textContent='El teléfono ya está guardado.';error.hidden=false;return;}
     if(state.contacts.length>=50){error.textContent='Se alcanzó el máximo de contactos.';error.hidden=false;return;}
     const id=Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,8);
-    state.contacts.push({id,name,phone});state.selectedContactId=id;persist();renderSelectedContact();renderContactList();
+    state.contacts.push({id,name,phone});persist();renderScreen();renderContactList();
     $('newContactName').value='';$('newContactPhone').value='';$('contactsDialog').close();notify('Contacto guardado: '+name);
   });
   $('phraseForm').addEventListener('submit',e=>{
     e.preventDefault();const s=$('newPhrase').value.trim();if(!s)return;
     if(state.ownPhrases.length>=100){notify('Llegaste al máximo de frases personales.');return;}
-    state.ownPhrases.push(s);state.category='propias';persist();renderCategories();renderPhrases();$('newPhrase').value='';$('phraseDialog').close();notify('Frase personal guardada');
+    state.ownPhrases.push(s);persist();view='pcat:propias';page=0;renderScreen();$('newPhrase').value='';$('phraseDialog').close();notify('Frase agregada en «Mis frases».');
   });
   window.addEventListener('online',updateOffline);window.addEventListener('offline',updateOffline);
   // Telegram
-  $('tgBtn').addEventListener('click',sendTelegram);
-  $('builderTgBtn').addEventListener('click',sendTelegram);
-  $('sendYes').addEventListener('click',()=>{
-    if(Date.now()-sendOpenedAt<600)return; // evita que un doble toque confirme sin querer
-    $('sendDialog').close();doSendTelegram();
-  });
-  $('sendNo').addEventListener('click',()=>$('sendDialog').close());
   $('tgOpen').addEventListener('click',()=>{$('settingsDialog').close();renderTgDialog();$('tgDialog').showModal();});
   $('tgConnect').addEventListener('click',connectTelegram);
   $('tgRefresh').addEventListener('click',()=>{if(!navigator.onLine){notify('Se necesita internet.');return;}reportPending=true;kickPolling();notify('Buscando…');});
@@ -1102,12 +1130,15 @@
     catch(e){notify(srvError(e));}
   });
   $('tgAutoRead').addEventListener('change',e=>{state.tg.autoRead=e.target.checked;persist();});
-  $('tgConfirm').addEventListener('change',e=>{state.tg.confirm=e.target.checked;persist();});
   $('tgDisconnect').addEventListener('click',disconnectTelegram);
   $('incomingSay').addEventListener('click',()=>talk($('incomingText').textContent));
+  // Responder: queda elegida esa persona para el próximo envío y vuelve el tablero para armar la respuesta.
   $('incomingReply').addEventListener('click',()=>{
-    if(incomingContactId&&state.contacts.some(c=>c.id===incomingContactId)){state.selectedContactId=incomingContactId;persist();renderSelectedContact();}
-    $('incoming').hidden=true;setMode('build');$('chatCard').scrollIntoView({behavior:'smooth',block:'start'});
+    const c=state.contacts.find(x=>x.id===incomingContactId);
+    $('incoming').hidden=true;
+    if(c){state.selectedContactId=c.id;markRead(c);persist();}
+    view='main';page=0;renderScreen();
+    if(c)notify('Armá tu respuesta para '+c.name);
   });
   $('incomingClose').addEventListener('click',()=>{$('incoming').hidden=true;});
   $('tgReplace').addEventListener('click',replaceToken);
@@ -1126,8 +1157,7 @@
   window.addEventListener('online',()=>{if(tgReady()){setConn('connecting');kickPolling();}});
   window.addEventListener('offline',()=>{if(tgReady())setConn('offline');});
   function renderAll(){
-    $('message').value=state.message;$('combine').checked=state.combine;
-    renderSelectedContact();renderCategories();renderPhrases();renderTokens();renderPunctuation();renderBuildCategories();renderBuildTiles();updatePrefs();setMode(state.mode,false);renderConn();renderJoinRequest();
+    updatePrefs();renderScreen();renderConn();renderJoinRequest();
     if($('tgDialog').open)renderTgDialog();
     if($('settingsDialog').open)renderVoiceSettings();
     if($('contactsDialog').open)renderContactList();

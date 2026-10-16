@@ -1,6 +1,21 @@
-# Hablemos V0.7 — Crear conversaciones sin escribir
+# Hablemos V0.8 — Crear conversaciones sin escribir
 
 **Prototipo accesible para Android**. Diseñado para una persona que comprende texto y puede pulsar botones grandes, pero no puede hablar y tiene dificultad para escribir.
+
+## Cambios de la versión 0.8: pantalla simple para manos con poca movilidad
+
+La pantalla principal se rediseñó para que Diego la use con el menor esfuerzo posible:
+
+- **Todo entra en una sola pantalla.** No hay que desplazarse ni deslizar.
+- **Arriba:** 🆘 Necesito ayuda y ⚙ Configuración. La configuración se abre **manteniendo apretado** el engranaje un segundo, para que no se abra por un toque sin querer.
+- **El mensaje** se ve en letra grande. Tocarlo lo dice en voz alta.
+- **Tablero de botones grandes**, en 2 columnas en el celular, que cambia solo con las palabras sugeridas para seguir. Con pocos botones, cada uno crece para ser más fácil de tocar. Para ver más se toca **▶ Más**, siempre en el mismo lugar, y **◀ Volver** está siempre primero.
+- **⭐ Frases rápidas:** se dicen en voz alta con un solo toque.
+- **💬 Mensajes de Mamá:** muestra la conversación en letra grande, con 🔊 para escuchar y ✍ para responder. Indica cuántos mensajes nuevos hay.
+- **Abajo, tres botones fijos:** ↶ Borrar (quita la última palabra), 🔊 Hablar y ✈ Enviar.
+- **Enviar en un paso:** aparece «¿A quién se lo mando?» con una tarjeta grande por persona. Tocar a la persona ya es la confirmación, y un doble toque rápido no envía. Hablemos usa Telegram o WhatsApp según la persona, sin que Diego tenga que elegir. Después de enviar, el mensaje se limpia para el siguiente.
+- **Para quien acompaña** (en Configuración): contactos, «Mis palabras», «Mis frases», Telegram, voz, copia de seguridad y protección de toques.
+- Los avisos cortos aparecen arriba y nunca tapan ni bloquean los botones.
 
 ## Cambios de la versión 0.7: Telegram sin pasos de aprobación
 
@@ -141,8 +156,8 @@ Los datos (contactos, frases, palabras aprendidas) se guardan **solo en ese tel�
 
 ### Publicar una nueva versión
 
-1. Cambiar el nombre de la caché en `sw.js` (por ejemplo `hablemos-offline-v12` → `hablemos-offline-v13`), para actualizar la copia que se usa sin conexión.
-2. En `index.html`, cambiar la versión del script: `app.js?v=0.7` → `app.js?v=0.7.1`. **Si no se cambia, el navegador puede seguir usando el `app.js` anterior hasta 10 minutos.**
+1. Cambiar el nombre de la caché en `sw.js` (por ejemplo `hablemos-offline-v13` → `hablemos-offline-v14`), para actualizar la copia que se usa sin conexión.
+2. En `index.html`, cambiar la versión del script: `app.js?v=0.8` → `app.js?v=0.8.1`. **Si no se cambia, el navegador puede seguir usando el `app.js` anterior hasta 10 minutos.**
 3. Guardar los cambios con git y subirlos: `git commit -am "…"` y `git push`.
 4. En uno o dos minutos GitHub Pages publica la nueva versión. Con internet, la próxima vez que se abra Hablemos ya carga la nueva.
 
